@@ -326,6 +326,10 @@
 	font-weight: 600;
 }
 
+.noticeActions {
+	margin-top: 0.5rem;
+}
+
 .downloadCta {
 	display: flex;
 	flex-wrap: wrap;

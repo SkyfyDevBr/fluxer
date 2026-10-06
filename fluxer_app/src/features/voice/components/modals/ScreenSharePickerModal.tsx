@@ -14,12 +14,14 @@ import type {NativePermissionResult} from '@app/features/permissions/system/util
 import {Button} from '@app/features/ui/button/Button';
 import * as ContextMenuCommands from '@app/features/ui/commands/ContextMenuCommands';
 import * as ModalCommands from '@app/features/ui/commands/ModalCommands';
+import * as ToastCommands from '@app/features/ui/commands/ToastCommands';
 import {Switch} from '@app/features/ui/components/form/FormSwitch';
 import {Spinner} from '@app/features/ui/components/Spinner';
 import {type TabItem, Tabs} from '@app/features/ui/tabs/Tabs';
 import {getElectronAPI, supportsDesktopScreenShareAudioCapture} from '@app/features/ui/utils/NativeUtils';
 import PrivacyPreferences from '@app/features/user/state/PrivacyPreferences';
 import styles from '@app/features/voice/components/modals/ScreenSharePickerModal.module.css';
+import {BrowserAudioUnsupportedNotice} from '@app/features/voice/components/modals/screen_share_picker_modal/BrowserAudioUnsupportedNotice';
 import {
 	loadScreenShareDesktopSourceList,
 	loadScreenShareDesktopSources,
@@ -85,6 +87,7 @@ import {
 } from '@app/features/voice/utils/ScreenShareAudioSummary';
 import {
 	getDisplayShareEnvironment,
+	isScreenShareAudioUnsupportedBrowser,
 	shouldShowDesktopDownloadCta,
 	supportsDeviceScreenShare,
 	usesNativeDisplaySharePicker,
@@ -181,6 +184,10 @@ const SCREEN_SHARE_AUDIO_UNAVAILABLE_TITLE_DESCRIPTOR = msg({
 const SCREEN_SHARE_AUDIO_UNAVAILABLE_BODY_DESCRIPTOR = msg({
 	message: 'Turn off audio sharing for this source or try again in a moment.',
 	comment: 'Error modal body shown after a native screen-share audio route fails to start.',
+});
+const SCREEN_SHARE_WITHOUT_AUDIO_DESCRIPTOR = msg({
+	message: "Sharing your screen without audio because the audio couldn't be captured.",
+	comment: 'Info toast shown after the picker retries a screen share without audio when audio capture failed.',
 });
 const APPS_DESCRIPTOR = msg({
 	message: 'Applications',
@@ -1037,6 +1044,7 @@ const ScreenSharePickerModalLoadedContent = observer(
 			nativeAudioAvailability != null &&
 			(nativeAudioAvailability.capabilities?.[captureScopeForActiveTab] === false ||
 				!nativeAudioAvailability.available);
+		const showBrowserAudioUnsupportedNotice = activeTab !== 'devices' && isScreenShareAudioUnsupportedBrowser();
 		const loadDesktopSources = useCallback(
 			async (options: {force?: boolean; silent?: boolean} = {}) => {
 				if (usesNativeDisplayPicker) {
@@ -1253,6 +1261,40 @@ const ScreenSharePickerModalLoadedContent = observer(
 			if (deviceCards.some((card) => card.id === selectedDeviceId)) return;
 			setSelectedDeviceId(null);
 		}, [deviceCards, selectedDeviceId]);
+		const retryDisplaySelectionWithoutAudio = useCallback(
+			async (cardId: string): Promise<boolean> => {
+				const selectedSource = desktopSourcesRef.current.find((source) => source.id === cardId);
+				const sourceDimensions =
+					selectedSource?.nativeWidth && selectedSource.nativeHeight
+						? {width: selectedSource.nativeWidth, height: selectedSource.nativeHeight}
+						: undefined;
+				const preferredDisplaySurface: 'window' | 'monitor' | undefined =
+					activeTab === 'apps' ? 'window' : activeTab === 'displays' ? 'monitor' : undefined;
+				const options = {
+					sourceDimensions,
+					preferredDisplaySurface,
+					isOwnWindow: selectedSource?.isOwnWindow === true,
+					includeAudio: false,
+				};
+				const didSelect =
+					mode === 'switch'
+						? await switchConfiguredDisplayScreenShare(usesNativeDisplayPicker ? null : cardId, options)
+						: await startConfiguredDisplayScreenShare(usesNativeDisplayPicker ? null : cardId, options);
+				if (!didSelect) {
+					return false;
+				}
+				const selectedCard = tabCards[activeTab].find((card) => card.id === cardId);
+				const kind: LastScreenShareSourceKind = activeTab === 'apps' ? 'app' : 'display';
+				recordLastScreenShareSource(
+					kind,
+					selectedSource?.id ?? cardId,
+					selectedCard?.title ?? selectedSource?.name ?? cardId,
+				);
+				ModalCommands.pop();
+				return true;
+			},
+			[activeTab, mode, tabCards, usesNativeDisplayPicker],
+		);
 		const handleStartSelection = useCallback(
 			async (cardId: string) => {
 				if (pendingSelectionIdRef.current) return;
@@ -1325,11 +1367,19 @@ const ScreenSharePickerModalLoadedContent = observer(
 				} catch (error) {
 					logger.warn('Screen share selection failed; invalidating source cache', {error, cardId});
 					if (isScreenShareAudioCaptureError(error)) {
-						showGenericErrorModal({
-							title: () => i18n._(SCREEN_SHARE_AUDIO_UNAVAILABLE_TITLE_DESCRIPTOR),
-							message: () => i18n._(SCREEN_SHARE_AUDIO_UNAVAILABLE_BODY_DESCRIPTOR),
-							dataFlx: 'voice.screen-share-picker-modal.audio-capture-error-modal',
-						});
+						const retriedWithoutAudio = activeTab !== 'devices' && (await retryDisplaySelectionWithoutAudio(cardId));
+						if (retriedWithoutAudio) {
+							ToastCommands.createToast({
+								type: 'info',
+								children: i18n._(SCREEN_SHARE_WITHOUT_AUDIO_DESCRIPTOR),
+							});
+						} else {
+							showGenericErrorModal({
+								title: () => i18n._(SCREEN_SHARE_AUDIO_UNAVAILABLE_TITLE_DESCRIPTOR),
+								message: () => i18n._(SCREEN_SHARE_AUDIO_UNAVAILABLE_BODY_DESCRIPTOR),
+								dataFlx: 'voice.screen-share-picker-modal.audio-capture-error-modal',
+							});
+						}
 					} else if (activeTab !== 'devices') {
 						void loadDesktopSources({force: true, silent: true});
 					}
@@ -1339,7 +1389,17 @@ const ScreenSharePickerModalLoadedContent = observer(
 					setPendingSelectionId(null);
 				}
 			},
-			[activeTab, i18n, loadDesktopSources, mode, nativeAudioAvailability, platform, tabCards, usesNativeDisplayPicker],
+			[
+				activeTab,
+				i18n,
+				loadDesktopSources,
+				mode,
+				nativeAudioAvailability,
+				platform,
+				retryDisplaySelectionWithoutAudio,
+				tabCards,
+				usesNativeDisplayPicker,
+			],
 		);
 		const handleCardSelect = useCallback(
 			(cardId: string) => {
@@ -1506,6 +1566,7 @@ const ScreenSharePickerModalLoadedContent = observer(
 					showTrack
 					data-flx="voice.screen-share-picker-modal.content"
 				>
+					{showBrowserAudioUnsupportedNotice && <BrowserAudioUnsupportedNotice />}
 					{showPerWindowAudioUnsupportedNotice && (
 						<PerWindowAudioNotice
 							platform={platform}

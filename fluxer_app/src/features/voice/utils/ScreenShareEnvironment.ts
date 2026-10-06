@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-import {getElectronAPI, isLinuxWaylandDesktopSession} from '@app/features/ui/utils/NativeUtils';
+import {getElectronAPI, isFirefoxBrowser, isLinuxWaylandDesktopSession} from '@app/features/ui/utils/NativeUtils';
 
 export type DisplayShareEnvironment = 'web' | 'desktop-custom' | 'desktop-wayland';
 
@@ -46,6 +46,10 @@ export function canRestartDisplayShareWithoutPreselectedSource(environment: Disp
 
 export function shouldShowDesktopDownloadCta(environment: DisplayShareEnvironment): boolean {
 	return environment === 'web';
+}
+
+export function isScreenShareAudioUnsupportedBrowser(): boolean {
+	return getElectronAPI() == null && isFirefoxBrowser();
 }
 
 export function supportsDeviceScreenShare(): boolean {

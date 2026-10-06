@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
+import {DESKTOP_DOWNLOAD_URL} from '@app/features/app/config/I18nDisplayConstants';
 import {Logger} from '@app/features/platform/utils/AppLogger';
 import * as PremiumModalCommands from '@app/features/premium/commands/PremiumModalCommands';
 import {shouldShowPremiumFeatures} from '@app/features/premium/utils/PremiumUtils';
@@ -8,7 +9,11 @@ import {CheckboxItem, MenuGroupLabel} from '@app/features/ui/action_menu/Context
 import {MenuGroup} from '@app/features/ui/action_menu/MenuGroup';
 import {MenuItemRadio} from '@app/features/ui/action_menu/MenuItemRadio';
 import {MenuItemSubmenu} from '@app/features/ui/action_menu/MenuItemSubmenu';
-import {getElectronAPI, supportsDesktopScreenShareAudioCapture} from '@app/features/ui/utils/NativeUtils';
+import {
+	getElectronAPI,
+	openExternalUrl,
+	supportsDesktopScreenShareAudioCapture,
+} from '@app/features/ui/utils/NativeUtils';
 import * as VoiceSettingsCommands from '@app/features/voice/commands/VoiceSettingsCommands';
 import {AudioSourcePickerLinuxSubmenu} from '@app/features/voice/components/AudioSourcePickerLinux';
 import styles from '@app/features/voice/components/StreamSettingsMenuContent.module.css';
@@ -36,6 +41,7 @@ import {
 import {
 	canRestartDisplayShareWithoutPreselectedSource,
 	type DisplayShareEnvironment,
+	isScreenShareAudioUnsupportedBrowser,
 	usesNativeDisplayShareAudioSelection,
 } from '@app/features/voice/utils/ScreenShareEnvironment';
 import {
@@ -366,6 +372,7 @@ export const StreamSettingsMenuContent = observer(
 		const currentAudioDeviceId = VoiceSettings.getScreenShareAudioDeviceId();
 		const effectiveAudioDeviceId = VoiceSettings.getEffectiveScreenShareAudioDeviceId();
 		const supportsStreamAudio = supportsStreamAudioCapture(shareContext);
+		const browserAudioUnsupported = shareContext !== 'device' && isScreenShareAudioUnsupportedBrowser();
 		const hasLiveScreenShareAudioPublication =
 			MediaEngine.room?.localParticipant?.getTrackPublication(SCREEN_SHARE_AUDIO_SOURCE) != null;
 		const [nativeAudioAvailability, setNativeAudioAvailability] = useState<NativeAudioAvailability | null>(
@@ -630,6 +637,7 @@ export const StreamSettingsMenuContent = observer(
 						displayShareEnvironment={displayShareEnvironment}
 						windowAudioScope={windowAudioScope}
 						compact={true}
+						browserAudioUnsupported={browserAudioUnsupported}
 						audioDeviceOptions={audioDeviceOptions}
 						currentAudioDeviceId={currentAudioDeviceId}
 						selectedAudioDeviceLabel={selectedAudioDeviceLabel}
@@ -754,6 +762,7 @@ export const StreamSettingsMenuContent = observer(
 						displayShareEnvironment={displayShareEnvironment}
 						windowAudioScope={windowAudioScope}
 						compact={false}
+						browserAudioUnsupported={browserAudioUnsupported}
 						audioDeviceOptions={audioDeviceOptions}
 						currentAudioDeviceId={currentAudioDeviceId}
 						selectedAudioDeviceLabel={selectedAudioDeviceLabel}
@@ -783,6 +792,7 @@ interface StreamSettingsAudioGroupProps {
 	displayShareEnvironment: DisplayShareEnvironment;
 	windowAudioScope: WindowShareAudioScope;
 	compact: boolean;
+	browserAudioUnsupported: boolean;
 	audioDeviceOptions: Array<MediaDeviceInfo>;
 	currentAudioDeviceId: string;
 	selectedAudioDeviceLabel: string;
@@ -798,6 +808,7 @@ const StreamSettingsAudioGroup = observer((props: StreamSettingsAudioGroupProps)
 		displayShareEnvironment,
 		windowAudioScope,
 		compact,
+		browserAudioUnsupported,
 		audioDeviceOptions,
 		currentAudioDeviceId,
 		selectedAudioDeviceLabel,
@@ -815,6 +826,32 @@ const StreamSettingsAudioGroup = observer((props: StreamSettingsAudioGroupProps)
 	};
 	return (
 		<>
+			{browserAudioUnsupported && (
+				<>
+					<CheckboxItem
+						checked={false}
+						disabled={true}
+						onCheckedChange={() => {}}
+						data-flx="voice.stream-settings-menu-content.audio-group.capture-audio-disabled"
+					>
+						{renderCaptureLabel()}
+					</CheckboxItem>
+					<div
+						className={styles.audioUnsupportedHint}
+						data-flx="voice.stream-settings-menu-content.audio-group.audio-unsupported-hint"
+					>
+						<Trans>Screen audio needs the desktop app in this browser.</Trans>{' '}
+						<button
+							type="button"
+							className={styles.audioUnsupportedLink}
+							onClick={() => void openExternalUrl(DESKTOP_DOWNLOAD_URL)}
+							data-flx="voice.stream-settings-menu-content.audio-group.audio-unsupported-link"
+						>
+							<Trans>Get the desktop app</Trans>
+						</button>
+					</div>
+				</>
+			)}
 			{audioMenuState.control.value === 'toggle' && (
 				<CheckboxItem
 					checked={audioMenuState.control.checked}
