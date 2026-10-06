@@ -1,0 +1,212 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
+#
+# Fork-only desktop build. Produces unsigned artifacts:
+#   - Windows x64: portable ZIP (win-unpacked + .portable marker)
+#   - Linux x64: AppImage, deb, rpm, tar.gz
+#
+# It deliberately skips the upstream signing (Apple/Azure), Velopack and
+# release-publishing steps, which depend on the fluxerapp release environment.
+
+name: build desktop (fork)
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Optional explicit CalVer build version (YYYY.MDD.MICRO).'
+        required: false
+        default: ''
+        type: string
+      skip_windows:
+        description: 'Skip the Windows build.'
+        required: false
+        default: false
+        type: boolean
+      skip_linux:
+        description: 'Skip the Linux build.'
+        required: false
+        default: false
+        type: boolean
+
+permissions:
+  contents: read
+
+concurrency:
+  group: desktop-fork-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CHANNEL: stable
+  BUILD_CHANNEL: stable
+  RELEASE_CHANNEL: stable
+  PUBLIC_RELEASE_CHANNEL: stable
+
+jobs:
+  meta:
+    name: Resolve build metadata
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    outputs:
+      version: ${{ steps.meta.outputs.version }}
+      pub_date: ${{ steps.meta.outputs.pub_date }}
+      source_sha: ${{ steps.meta.outputs.source_sha }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: '1.98.1'
+      - name: Resolve CalVer version
+        id: meta
+        env:
+          FLUXER_BUILD_VERSION: ${{ inputs.version }}
+        run: >-
+          cargo run --locked --quiet --manifest-path tools/ci/Cargo.toml -- build-desktop
+          --step set_metadata --channel stable
+
+  windows:
+    name: Windows x64
+    needs: meta
+    if: ${{ !inputs.skip_windows }}
+    runs-on: windows-2025
+    timeout-minutes: 180
+    env:
+      VERSION: ${{ needs.meta.outputs.version }}
+      BUILD_VERSION: ${{ needs.meta.outputs.version }}
+      PUBLIC_BUILD_VERSION: ${{ needs.meta.outputs.version }}
+      PUB_DATE: ${{ needs.meta.outputs.pub_date }}
+      SOURCE_SHA: ${{ needs.meta.outputs.source_sha }}
+      DESKTOP_PLATFORM: windows
+      DESKTOP_ARCH: x64
+      PLATFORM: windows
+      ARCH: x64
+      ELECTRON_ARCH: x64
+      FLUXER_CI_MANIFEST: ${{ github.workspace }}/tools/ci/Cargo.toml
+    steps:
+      - uses: actions/checkout@v4
+      - uses: TheMrMilchmann/setup-msvc-dev@v4
+        with:
+          arch: amd64
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: '1.98.1'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '26'
+      - name: Install pnpm
+        run: npm install --global pnpm@11.27.0
+      - name: Ensure python3 command
+        run: >-
+          cargo run --locked --quiet --manifest-path "$env:FLUXER_CI_MANIFEST" -- build-desktop
+          --step ensure_python3_windows
+      - name: Install Rust Windows target
+        run: >-
+          cargo run --locked --quiet --manifest-path "$env:FLUXER_CI_MANIFEST" -- build-desktop
+          --step install_rust_windows_targets
+      - name: Install dependencies
+        working-directory: fluxer_desktop
+        run: >-
+          cargo run --locked --quiet --manifest-path "$env:FLUXER_CI_MANIFEST" -- build-desktop
+          --step install_dependencies
+      - name: Update version
+        working-directory: fluxer_desktop
+        run: >-
+          cargo run --locked --quiet --manifest-path "$env:FLUXER_CI_MANIFEST" -- build-desktop
+          --step update_version
+      - name: Set build channel
+        working-directory: fluxer_desktop
+        run: >-
+          cargo run --locked --quiet --manifest-path "$env:FLUXER_CI_MANIFEST" -- build-desktop
+          --step set_build_channel
+      - name: Build Electron main process
+        working-directory: fluxer_desktop
+        run: >-
+          cargo run --locked --quiet --manifest-path "$env:FLUXER_CI_MANIFEST" -- build-desktop
+          --step build_electron_main
+      - name: Build Windows app (unsigned)
+        working-directory: fluxer_desktop
+        run: >-
+          cargo run --locked --quiet --manifest-path "$env:FLUXER_CI_MANIFEST" -- build-desktop
+          --step build_app_windows
+      - name: Create portable ZIP
+        working-directory: fluxer_desktop
+        run: >-
+          cargo run --locked --quiet --manifest-path "$env:FLUXER_CI_MANIFEST" -- build-desktop
+          --step create_portable_zip_windows
+      - name: Upload Windows artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: fluxer-desktop-fork-windows-x64
+          path: fluxer_desktop/dist-electron/*portable*.zip
+          if-no-files-found: error
+          retention-days: 14
+
+  linux:
+    name: Linux x64
+    needs: meta
+    if: ${{ !inputs.skip_linux }}
+    runs-on: ubuntu-22.04
+    timeout-minutes: 180
+    env:
+      VERSION: ${{ needs.meta.outputs.version }}
+      BUILD_VERSION: ${{ needs.meta.outputs.version }}
+      PUBLIC_BUILD_VERSION: ${{ needs.meta.outputs.version }}
+      PUB_DATE: ${{ needs.meta.outputs.pub_date }}
+      SOURCE_SHA: ${{ needs.meta.outputs.source_sha }}
+      DESKTOP_PLATFORM: linux
+      DESKTOP_ARCH: x64
+      PLATFORM: linux
+      ARCH: x64
+      ELECTRON_ARCH: x64
+      FLUXER_CI_MANIFEST: ${{ github.workspace }}/tools/ci/Cargo.toml
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: '1.98.1'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '26'
+      - name: Install pnpm
+        run: npm install --global pnpm@11.27.0
+      - name: Install Linux build dependencies
+        run: >-
+          cargo run --locked --quiet --manifest-path tools/ci/Cargo.toml -- build-desktop
+          --step install_linux_deps
+      - name: Install dependencies
+        working-directory: fluxer_desktop
+        run: >-
+          cargo run --locked --quiet --manifest-path "$FLUXER_CI_MANIFEST" -- build-desktop
+          --step install_dependencies
+      - name: Update version
+        working-directory: fluxer_desktop
+        run: >-
+          cargo run --locked --quiet --manifest-path "$FLUXER_CI_MANIFEST" -- build-desktop
+          --step update_version
+      - name: Set build channel
+        working-directory: fluxer_desktop
+        run: >-
+          cargo run --locked --quiet --manifest-path "$FLUXER_CI_MANIFEST" -- build-desktop
+          --step set_build_channel
+      - name: Build Electron main process
+        working-directory: fluxer_desktop
+        run: >-
+          cargo run --locked --quiet --manifest-path "$FLUXER_CI_MANIFEST" -- build-desktop
+          --step build_electron_main
+      - name: Build Linux app (unsigned)
+        working-directory: fluxer_desktop
+        env:
+          USE_SYSTEM_FPM: 'true'
+        run: >-
+          cargo run --locked --quiet --manifest-path "$FLUXER_CI_MANIFEST" -- build-desktop
+          --step build_app_linux
+      - name: Upload Linux artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: fluxer-desktop-fork-linux-x64
+          path: |
+            fluxer_desktop/dist-electron/*.AppImage
+            fluxer_desktop/dist-electron/*.deb
+            fluxer_desktop/dist-electron/*.rpm
+            fluxer_desktop/dist-electron/*.tar.gz
+          if-no-files-found: error
+          retention-days: 14
