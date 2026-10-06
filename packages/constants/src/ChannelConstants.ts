@@ -9,12 +9,20 @@ export const ChannelTypes = {
 	GROUP_DM: 3,
 	GUILD_CATEGORY: 4,
 	GUILD_ANNOUNCEMENT: 5,
+	GUILD_ANNOUNCEMENT_THREAD: 10,
+	GUILD_PUBLIC_THREAD: 11,
+	GUILD_PRIVATE_THREAD: 12,
 	GUILD_LINK: 998,
 	DM_PERSONAL_NOTES: 999,
 } as const;
 
 export type ChannelType = ValueOf<typeof ChannelTypes>;
 
+export const THREAD_CHANNEL_TYPES = new Set<number>([
+	ChannelTypes.GUILD_ANNOUNCEMENT_THREAD,
+	ChannelTypes.GUILD_PUBLIC_THREAD,
+	ChannelTypes.GUILD_PRIVATE_THREAD,
+]);
 export const GUILD_TEXT_BASED_CHANNEL_TYPES = new Set<number>([
 	ChannelTypes.GUILD_TEXT,
 	ChannelTypes.GUILD_VOICE,
@@ -22,6 +30,7 @@ export const GUILD_TEXT_BASED_CHANNEL_TYPES = new Set<number>([
 ]);
 export const TEXT_BASED_CHANNEL_TYPES = new Set<number>([
 	...GUILD_TEXT_BASED_CHANNEL_TYPES,
+	...THREAD_CHANNEL_TYPES,
 	ChannelTypes.DM,
 	ChannelTypes.DM_PERSONAL_NOTES,
 	ChannelTypes.GROUP_DM,
@@ -59,7 +68,9 @@ export const MessageTypes = {
 	CHANNEL_PINNED_MESSAGE: 6,
 	USER_JOIN: 7,
 	CHANNEL_FOLLOW_ADD: 12,
+	THREAD_CREATED: 18,
 	REPLY: 19,
+	THREAD_STARTER_MESSAGE: 21,
 	CLIENT_SYSTEM: 99,
 } as const;
 
@@ -71,6 +82,8 @@ const MESSAGE_TYPE_DELETABLE = {
 	[MessageTypes.CHANNEL_PINNED_MESSAGE]: true,
 	[MessageTypes.USER_JOIN]: true,
 	[MessageTypes.CHANNEL_FOLLOW_ADD]: true,
+	[MessageTypes.THREAD_CREATED]: false,
+	[MessageTypes.THREAD_STARTER_MESSAGE]: false,
 	[MessageTypes.RECIPIENT_ADD]: false,
 	[MessageTypes.RECIPIENT_REMOVE]: false,
 	[MessageTypes.CALL]: false,
@@ -193,6 +206,10 @@ export const Permissions = {
 	MANAGE_ROLES: 1n << 28n,
 	MANAGE_WEBHOOKS: 1n << 29n,
 	MANAGE_EXPRESSIONS: 1n << 30n,
+	MANAGE_THREADS: 1n << 34n,
+	CREATE_PUBLIC_THREADS: 1n << 35n,
+	CREATE_PRIVATE_THREADS: 1n << 36n,
+	SEND_MESSAGES_IN_THREADS: 1n << 38n,
 	USE_EXTERNAL_STICKERS: 1n << 37n,
 	MODERATE_MEMBERS: 1n << 40n,
 	CREATE_EXPRESSIONS: 1n << 43n,
@@ -232,6 +249,10 @@ export const PermissionsDescriptions: Record<keyof typeof Permissions, string> =
 	MANAGE_ROLES: 'Allows management and editing of roles',
 	MANAGE_WEBHOOKS: 'Allows management and editing of webhooks',
 	MANAGE_EXPRESSIONS: 'Allows management of guild expressions',
+	MANAGE_THREADS: 'Allows management of threads, including archiving, locking and deleting them',
+	CREATE_PUBLIC_THREADS: 'Allows creating public threads',
+	CREATE_PRIVATE_THREADS: 'Allows creating private threads',
+	SEND_MESSAGES_IN_THREADS: 'Allows sending messages in threads',
 	USE_EXTERNAL_STICKERS: 'Allows using stickers from other guilds',
 	MODERATE_MEMBERS: 'Allows timing out users',
 	CREATE_EXPRESSIONS: 'Allows creating guild expressions',
@@ -256,7 +277,9 @@ export const DEFAULT_PERMISSIONS =
 	Permissions.USE_VAD |
 	Permissions.CHANGE_NICKNAME |
 	Permissions.USE_EXTERNAL_STICKERS |
-	Permissions.VIEW_CHANNEL_MEMBERS;
+	Permissions.VIEW_CHANNEL_MEMBERS |
+	Permissions.CREATE_PUBLIC_THREADS |
+	Permissions.SEND_MESSAGES_IN_THREADS;
 export const ElevatedPermissions =
 	Permissions.KICK_MEMBERS |
 	Permissions.BAN_MEMBERS |
@@ -267,5 +290,7 @@ export const ElevatedPermissions =
 	Permissions.MANAGE_MESSAGES |
 	Permissions.MANAGE_WEBHOOKS |
 	Permissions.MANAGE_EXPRESSIONS |
-	Permissions.MODERATE_MEMBERS;
+	Permissions.MODERATE_MEMBERS |
+	Permissions.MANAGE_THREADS |
+	Permissions.CREATE_PRIVATE_THREADS;
 export const CHANNEL_REINDEX_AFTER_TIMESTAMP = 1779557400;

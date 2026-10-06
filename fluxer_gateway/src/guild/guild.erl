@@ -640,6 +640,10 @@ event_mutates_guild_data(E) ->
         channel_update,
         channel_update_bulk,
         channel_delete,
+        thread_create,
+        thread_update,
+        thread_delete,
+        thread_members_update,
         guild_update
     ]).
 

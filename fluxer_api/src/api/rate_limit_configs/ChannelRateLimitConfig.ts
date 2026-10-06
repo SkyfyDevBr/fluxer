@@ -136,6 +136,18 @@ export const ChannelRateLimitConfigs = {
 		bucket: 'channel:follower_stats::channel_id',
 		config: {limit: 10, windowMs: ms('10 seconds')},
 	} as RouteRateLimitConfig,
+	THREAD_CREATE: {
+		bucket: 'channel:thread:create::channel_id',
+		config: {limit: 5, windowMs: ms('10 seconds')},
+	} as RouteRateLimitConfig,
+	THREAD_MEMBER_UPDATE: {
+		bucket: 'channel:thread:member::channel_id',
+		config: {limit: 20, windowMs: ms('10 seconds')},
+	} as RouteRateLimitConfig,
+	THREAD_LIST: {
+		bucket: 'channel:thread:list::channel_id',
+		config: {limit: 100, windowMs: ms('10 seconds')},
+	} as RouteRateLimitConfig,
 	VOICE_ENTRANCE_SOUND_PLAY: {
 		bucket: 'voice:entrance_sound:play::user_id::channel_id',
 		config: {limit: 3, windowMs: ms('30 seconds')},

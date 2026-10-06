@@ -20,6 +20,7 @@ import {MessageSendService} from '@app/api/channel/services/message/MessageSendS
 import {MessageSystemService} from '@app/api/channel/services/message/MessageSystemService';
 import {MessageValidationService} from '@app/api/channel/services/message/MessageValidationService';
 import {MessageWriteLock} from '@app/api/channel/services/message/MessageWriteLock';
+import type {ThreadService} from '@app/api/channel/services/thread/ThreadService';
 import type {IFavoriteMemeRepository} from '@app/api/favorite_meme/IFavoriteMemeRepository';
 import type {GuildAuditLogService} from '@app/api/guild/GuildAuditLogService';
 import type {IGuildRepositoryAggregate} from '@app/api/guild/repositories/IGuildRepositoryAggregate';
@@ -74,6 +75,7 @@ export class MessageService {
 		persistenceService: MessagePersistenceService,
 		attachmentUploadTraceRepository: AttachmentUploadTraceRepository,
 		limitConfigService: LimitConfigService,
+		threadService: ThreadService,
 	) {
 		this.validation = new MessageValidationService(cacheService, limitConfigService);
 		this.writeLock = new MessageWriteLock(cacheService, channelRepository.messages);
@@ -138,6 +140,7 @@ export class MessageService {
 			limitConfigService,
 			messageWriteLock: this.writeLock,
 			crosspostPropagation: this.crosspostPropagation,
+			threadService,
 		});
 		this.edit = new MessageEditService({
 			channelRepository,
@@ -164,6 +167,7 @@ export class MessageService {
 			gatewayService,
 			guildAuditLogService,
 			crosspostPropagation: this.crosspostPropagation,
+			threadService,
 		});
 		this.crosspost = new MessageCrosspostService({
 			channelRepository,

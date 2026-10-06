@@ -146,6 +146,9 @@ event_requires_prune(guild_role_delete) -> true;
 event_requires_prune(channel_update) -> true;
 event_requires_prune(channel_update_bulk) -> true;
 event_requires_prune(channel_delete) -> true;
+event_requires_prune(thread_update) -> true;
+event_requires_prune(thread_delete) -> true;
+event_requires_prune(thread_members_update) -> true;
 event_requires_prune(_) -> false.
 
 -spec prune_invalid_member_subscriptions(guild_state()) -> guild_state().

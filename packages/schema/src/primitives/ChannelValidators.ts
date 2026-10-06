@@ -5,6 +5,11 @@ import {
 	ChannelOverwriteTypesDescriptions,
 	ChannelTypes,
 } from '@fluxer/constants/src/ChannelConstants';
+import {
+	THREAD_AUTO_ARCHIVE_DURATION_DEFAULT,
+	THREAD_AUTO_ARCHIVE_DURATION_MAX,
+	THREAD_AUTO_ARCHIVE_DURATION_MIN,
+} from '@fluxer/constants/src/LimitConstants';
 import {ValidationErrorCodes} from '@fluxer/constants/src/ValidationErrorCodes';
 import {
 	createInt32EnumType,
@@ -30,6 +35,13 @@ export const ChannelTypeSchema = createInt32EnumType(
 			'GUILD_ANNOUNCEMENT',
 			'A guild channel whose messages can be published to channels that follow it',
 		],
+		[
+			ChannelTypes.GUILD_ANNOUNCEMENT_THREAD,
+			'GUILD_ANNOUNCEMENT_THREAD',
+			'A thread within a guild announcement channel',
+		],
+		[ChannelTypes.GUILD_PUBLIC_THREAD, 'GUILD_PUBLIC_THREAD', 'A public thread within a guild channel'],
+		[ChannelTypes.GUILD_PRIVATE_THREAD, 'GUILD_PRIVATE_THREAD', 'A private thread within a guild channel'],
 		[ChannelTypes.GUILD_LINK, 'GUILD_LINK', 'A link channel for external resources'],
 		[ChannelTypes.DM_PERSONAL_NOTES, 'DM_PERSONAL_NOTES', 'Personal notes DM channel'],
 	],
@@ -45,6 +57,21 @@ export const ChannelOverwriteTypeSchema = withOpenApiType(
 		'The type of entity the overwrite applies to',
 	),
 	'ChannelOverwriteType',
+);
+export const ThreadAutoArchiveDurationSchema = withOpenApiType(
+	createNamedLiteralUnion(
+		[
+			[60, 'HOUR', 'Archive after one hour of inactivity'],
+			[1440, 'DAY', 'Archive after 24 hours of inactivity'],
+			[4320, 'THREE_DAYS', 'Archive after three days of inactivity'],
+			[10080, 'WEEK', 'Archive after one week of inactivity'],
+		] as const,
+		`The duration in minutes before the thread is automatically archived (${THREAD_AUTO_ARCHIVE_DURATION_MIN}-${THREAD_AUTO_ARCHIVE_DURATION_MAX})`,
+	),
+	'ThreadAutoArchiveDuration',
+);
+export const ThreadAutoArchiveDurationType = ThreadAutoArchiveDurationSchema.default(
+	THREAD_AUTO_ARCHIVE_DURATION_DEFAULT,
 );
 const WHITESPACE_REGEX = /\s+/g;
 const MULTIPLE_HYPHENS_REGEX = /-{2,}/g;

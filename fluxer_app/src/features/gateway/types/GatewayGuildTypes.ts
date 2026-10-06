@@ -12,6 +12,7 @@ export type GuildReadyData = Readonly<{
 	id: string;
 	properties: Omit<Guild, 'roles'>;
 	channels: ReadonlyArray<Channel>;
+	threads?: ReadonlyArray<Channel>;
 	emojis: ReadonlyArray<GuildEmoji>;
 	stickers?: ReadonlyArray<GuildSticker>;
 	members: ReadonlyArray<GuildMemberData>;

@@ -119,6 +119,13 @@ export const CrosspostIcon: React.FC<IconProps> = observer(({size = 16}) => (
 		data-flx="ui.action-menu.context-menu-icons.crosspost-icon.announcement-channel-icon"
 	/>
 ));
+export const CreateThreadIcon: React.FC<IconProps> = observer(({size = 16}) => (
+	<ChatCircleIcon
+		size={remFromPx(size)}
+		weight="fill"
+		data-flx="ui.action-menu.context-menu-icons.create-thread-icon.chat-circle-icon"
+	/>
+));
 export const EditIcon: React.FC<IconProps> = observer(({size = 16, weight = 'fill'}) => (
 	<PencilIcon
 		size={remFromPx(size)}

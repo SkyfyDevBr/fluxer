@@ -20,7 +20,7 @@ import {ChannelRepository} from '@app/api/channel/ChannelRepository';
 import {createMessageResponseDataService} from '@app/api/channel/services/message/MessageResponseDataService';
 import {BatchBuilder, deleteOneOrMany, fetchMany, fetchOne} from '@app/api/database/CassandraQueryExecution';
 import {defineTable} from '@app/api/database/CassandraTableDsl';
-import type {ChannelRow} from '@app/api/database/types/ChannelTypes';
+import {CHANNEL_THREAD_COLUMN_DEFAULTS, type ChannelRow} from '@app/api/database/types/ChannelTypes';
 import {
 	CHANNEL_EMPTY_BUCKET_COLUMNS,
 	CHANNEL_MESSAGE_BUCKET_COLUMNS,
@@ -972,6 +972,7 @@ export function TestHarnessController(app: HonoApp) {
 			const channelId = createChannelID(await snowflakeService.generate());
 			const lastMessageId = createMessageID(await snowflakeService.generateForChannel(channelId));
 			const channelRow: ChannelRow = {
+				...CHANNEL_THREAD_COLUMN_DEFAULTS,
 				channel_id: channelId,
 				guild_id: null,
 				type: ChannelTypes.DM,
@@ -1014,6 +1015,7 @@ export function TestHarnessController(app: HonoApp) {
 				const channelId = createChannelID(await snowflakeService.generate());
 				const lastMessageId = createMessageID(await snowflakeService.generateForChannel(channelId));
 				const channelRow: ChannelRow = {
+					...CHANNEL_THREAD_COLUMN_DEFAULTS,
 					channel_id: channelId,
 					guild_id: null,
 					type: ChannelTypes.GROUP_DM,

@@ -99,6 +99,32 @@ function serializeGuildTextChannel(channel: Channel, ctx: ContentWarningCtx): Ch
 	};
 }
 
+function serializeGuildThreadChannel(channel: Channel, ctx: ContentWarningCtx): ChannelResponse {
+	const metadata = channel.threadMetadata;
+	return {
+		...serializeBaseChannelFields(channel),
+		...serializeMessageableFields(channel),
+		...serializeGuildChannelFields(channel),
+		parent_id: channel.parentId ? channel.parentId.toString() : null,
+		owner_id: channel.ownerId ? channel.ownerId.toString() : null,
+		...serializeContentWarningFields(channel, ctx),
+		rate_limit_per_user: channel.rateLimitPerUser,
+		thread_metadata: metadata
+			? {
+					archived: metadata.archived,
+					auto_archive_duration: metadata.autoArchiveDuration as 60 | 1440 | 4320 | 10080,
+					archive_timestamp: (metadata.archiveTimestamp ?? new Date()).toISOString(),
+					locked: metadata.locked,
+					invitable: metadata.invitable,
+					create_timestamp: metadata.createTimestamp ? metadata.createTimestamp.toISOString() : null,
+				}
+			: null,
+		member_count: channel.memberCount,
+		message_count: channel.messageCount,
+		total_message_sent: channel.totalMessageSent,
+	};
+}
+
 function serializeGuildVoiceChannel(channel: Channel, ctx: ContentWarningCtx): ChannelResponse {
 	return {
 		...serializeBaseChannelFields(channel),
@@ -199,6 +225,11 @@ export async function mapChannelToResponse(params: MapChannelToResponseParams): 
 		case ChannelTypes.GUILD_ANNOUNCEMENT:
 			response = serializeGuildTextChannel(channel, ctx);
 			break;
+		case ChannelTypes.GUILD_ANNOUNCEMENT_THREAD:
+		case ChannelTypes.GUILD_PUBLIC_THREAD:
+		case ChannelTypes.GUILD_PRIVATE_THREAD:
+			response = serializeGuildThreadChannel(channel, ctx);
+			break;
 		case ChannelTypes.GUILD_VOICE:
 			response = serializeGuildVoiceChannel(channel, ctx);
 			break;
@@ -235,6 +266,16 @@ export async function mapChannelToResponse(params: MapChannelToResponseParams): 
 			};
 	}
 	return response;
+}
+
+export async function mapThreadToInternalResponse(
+	params: MapChannelToResponseParams,
+): Promise<ChannelResponse & {thread_member_ids?: Array<string>}> {
+	const response = await mapChannelToResponse(params);
+	return {
+		...response,
+		thread_member_ids: Array.from(params.channel.threadMemberIds).map((userId) => userId.toString()),
+	};
 }
 
 export function mapChannelToPartialResponse(channel: Channel): ChannelPartialResponse {

@@ -9,6 +9,7 @@ import type {MessageDispatchService} from '@app/api/channel/services/message/Mes
 import {isOperationDisabled, purgeMessageAttachments} from '@app/api/channel/services/message/MessageHelpers';
 import type {MessageSearchService} from '@app/api/channel/services/message/MessageSearchService';
 import type {MessageValidationService} from '@app/api/channel/services/message/MessageValidationService';
+import type {ThreadService} from '@app/api/channel/services/thread/ThreadService';
 import type {GuildAuditLogService} from '@app/api/guild/GuildAuditLogService';
 import type {IPurgeQueue} from '@app/api/infrastructure/CachePurgeQueue';
 import type {IGatewayService} from '@app/api/infrastructure/IGatewayService';
@@ -41,6 +42,7 @@ interface MessageDeleteServiceDeps {
 	gatewayService: IGatewayService;
 	guildAuditLogService: GuildAuditLogService;
 	crosspostPropagation: CrosspostPropagation;
+	threadService: ThreadService;
 }
 
 export class MessageDeleteService {
@@ -86,6 +88,7 @@ export class MessageDeleteService {
 			message.pinnedTimestamp || undefined,
 		);
 		await this.deps.dispatchService.dispatchMessageDelete({channel, messageId, message});
+		await this.deps.threadService.recordThreadMessageDeleted({channel});
 		await this.deps.crosspostPropagation.enqueueCrosspostSourceRemoval({
 			messages: [message],
 			mode: 'source_deleted',
@@ -141,6 +144,7 @@ export class MessageDeleteService {
 			message.pinnedTimestamp || undefined,
 		);
 		await this.deps.dispatchService.dispatchMessageDelete({channel, messageId, message});
+		await this.deps.threadService.recordThreadMessageDeleted({channel});
 		await this.deps.crosspostPropagation.enqueueCrosspostSourceRemoval({
 			messages: [message],
 			mode: 'source_deleted',

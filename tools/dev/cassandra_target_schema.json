@@ -3524,6 +3524,46 @@
 				{
 					"name": "content_warning_text",
 					"type": "text"
+				},
+				{
+					"name": "thread_archived",
+					"type": "boolean"
+				},
+				{
+					"name": "thread_auto_archive_duration",
+					"type": "int"
+				},
+				{
+					"name": "thread_archive_timestamp",
+					"type": "timestamp"
+				},
+				{
+					"name": "thread_locked",
+					"type": "boolean"
+				},
+				{
+					"name": "thread_invitable",
+					"type": "boolean"
+				},
+				{
+					"name": "thread_create_timestamp",
+					"type": "timestamp"
+				},
+				{
+					"name": "thread_member_ids",
+					"type": "set<bigint>"
+				},
+				{
+					"name": "member_count",
+					"type": "int"
+				},
+				{
+					"name": "message_count",
+					"type": "int"
+				},
+				{
+					"name": "total_message_sent",
+					"type": "int"
 				}
 			],
 			"primary_key": "((channel_id, soft_deleted))",
@@ -8672,6 +8712,29 @@
 				}
 			],
 			"primary_key": "((source_channel_id), webhook_id)",
+			"options": ""
+		},
+		{
+			"name": "thread_members",
+			"columns": [
+				{
+					"name": "channel_id",
+					"type": "bigint"
+				},
+				{
+					"name": "user_id",
+					"type": "bigint"
+				},
+				{
+					"name": "join_timestamp",
+					"type": "timestamp"
+				},
+				{
+					"name": "flags",
+					"type": "int"
+				}
+			],
+			"primary_key": "((channel_id), user_id)",
 			"options": ""
 		}
 	],

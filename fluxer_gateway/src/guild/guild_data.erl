@@ -343,9 +343,11 @@ build_member_guild_data(UserId, Member, Data, State) ->
 
 -spec build_guild_collection_data(map(), [map()], guild_state()) -> map().
 build_guild_collection_data(Data, Channels, State) ->
+    {GuildChannels, Threads} = split_thread_channels(map_utils:ensure_list(Channels)),
     #{
         <<"roles">> => map_utils:ensure_list(maps:get(<<"roles">>, Data, [])),
-        <<"channels">> => map_utils:ensure_list(Channels),
+        <<"channels">> => GuildChannels,
+        <<"threads">> => Threads,
         <<"emojis">> => map_utils:ensure_list(maps:get(<<"emojis">>, Data, [])),
         <<"stickers">> => map_utils:ensure_list(maps:get(<<"stickers">>, Data, [])),
         <<"member_count">> => maps:get(
@@ -386,11 +388,13 @@ build_guild_state_map(
     VoiceStates,
     JoinedAt
 ) ->
+    {GuildChannels, Threads} = split_thread_channels(Channels),
     #{
         <<"id">> => guild_id_wire_value(GuildId),
         <<"properties">> => maps:get(<<"guild">>, Data, #{}),
         <<"roles">> => map_utils:ensure_list(maps:get(<<"roles">>, Data, [])),
-        <<"channels">> => Channels,
+        <<"channels">> => GuildChannels,
+        <<"threads">> => Threads,
         <<"emojis">> => maps:get(<<"emojis">>, Data, []),
         <<"stickers">> => maps:get(<<"stickers">>, Data, []),
         <<"members">> => Members,
@@ -400,6 +404,17 @@ build_guild_state_map(
         <<"voice_states">> => VoiceStates,
         <<"joined_at">> => JoinedAt
     }.
+
+-spec split_thread_channels([map()]) -> {[map()], [map()]}.
+split_thread_channels(Channels) ->
+    lists:partition(fun(Channel) -> not is_thread_channel(Channel) end, Channels).
+
+-spec is_thread_channel(map()) -> boolean().
+is_thread_channel(Channel) ->
+    case guild_data_normalize_schema:int(maps:get(<<"type">>, Channel, undefined)) of
+        Type when Type =:= 10; Type =:= 11; Type =:= 12 -> true;
+        _ -> false
+    end.
 
 -spec fetch_from_voice_pid(pid(), guild_state()) -> guild_state().
 fetch_from_voice_pid(VoiceServerPid, State) ->

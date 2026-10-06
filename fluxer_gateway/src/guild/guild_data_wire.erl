@@ -155,6 +155,7 @@ named_key_kind(<<"recipients">>) -> maybe_scalar_list;
 named_key_kind(<<"guild_folders">>) -> restrict;
 named_key_kind(<<"rtc_regions">>) -> restrict;
 named_key_kind(<<"recipient_ids">>) -> drop;
+named_key_kind(<<"thread_member_ids">>) -> drop;
 named_key_kind(<<"role_index">>) -> drop;
 named_key_kind(<<"channel_index">>) -> drop;
 named_key_kind(<<"member_role_index">>) -> drop;

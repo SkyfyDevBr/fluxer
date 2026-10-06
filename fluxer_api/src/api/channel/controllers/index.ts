@@ -6,11 +6,13 @@ import {ChannelFollowController} from '@app/api/channel/controllers/ChannelFollo
 import {MessageController} from '@app/api/channel/controllers/MessageController';
 import {MessageInteractionController} from '@app/api/channel/controllers/MessageInteractionController';
 import {StreamController} from '@app/api/channel/controllers/StreamController';
+import {ThreadController} from '@app/api/channel/controllers/ThreadController';
 import type {HonoApp} from '@app/api/types/HonoEnv';
 
 export function registerChannelControllers(app: HonoApp) {
 	ChannelController(app);
 	ChannelFollowController(app);
+	ThreadController(app);
 	MessageInteractionController(app);
 	MessageController(app);
 	CallController(app);

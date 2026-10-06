@@ -4,7 +4,7 @@ import {type ChannelID, createChannelID, createGuildID, createMessageID} from '@
 import {ChannelDataRepository} from '@app/api/channel/repositories/ChannelDataRepository';
 import {setCassandraQueryExecutorForTesting, upsertOne} from '@app/api/database/CassandraQueryExecution';
 import type {CassandraParams, KvQueryMeta, PreparedQuery} from '@app/api/database/CassandraTypes';
-import type {ChannelRow} from '@app/api/database/types/ChannelTypes';
+import {CHANNEL_THREAD_COLUMN_DEFAULTS, type ChannelRow} from '@app/api/database/types/ChannelTypes';
 import {createRequestCache} from '@app/api/middleware/RequestCacheMiddleware';
 import {Channel} from '@app/api/models/Channel';
 import {Channels} from '@app/api/Tables';
@@ -42,6 +42,7 @@ class RecordingCassandraQueryExecutor {
 
 function makeChannelRow(channelId: ChannelID): ChannelRow {
 	return {
+		...CHANNEL_THREAD_COLUMN_DEFAULTS,
 		channel_id: channelId,
 		guild_id: createGuildID(1810000000000000000n),
 		type: ChannelTypes.GUILD_TEXT,

@@ -93,6 +93,18 @@ export const Endpoints = {
 	CHANNEL_FOLLOWER_STATS: (channelId: string) => `/channels/${channelId}/follower-stats`,
 	CHANNEL_RTC_REGIONS: (channelId: string) => `/channels/${channelId}/rtc-regions`,
 	CHANNEL_SLOWMODE: (channelId: string) => `/channels/${channelId}/slowmode`,
+	CHANNEL_THREADS: (channelId: string) => `/channels/${channelId}/threads`,
+	CHANNEL_MESSAGE_THREADS: (channelId: string, messageId: string) =>
+		`/channels/${channelId}/messages/${messageId}/threads`,
+	CHANNEL_THREADS_ACTIVE: (channelId: string) => `/channels/${channelId}/threads/active`,
+	CHANNEL_THREADS_ARCHIVED_PUBLIC: (channelId: string) => `/channels/${channelId}/threads/archived/public`,
+	CHANNEL_THREADS_ARCHIVED_PRIVATE: (channelId: string) => `/channels/${channelId}/threads/archived/private`,
+	CHANNEL_THREADS_ARCHIVED_JOINED_PRIVATE: (channelId: string) =>
+		`/channels/${channelId}/users/@me/threads/archived/private`,
+	CHANNEL_THREAD_MEMBERS: (channelId: string) => `/channels/${channelId}/thread-members`,
+	CHANNEL_THREAD_MEMBER: (channelId: string, userId: string) => `/channels/${channelId}/thread-members/${userId}`,
+	CHANNEL_THREAD_MEMBER_ME: (channelId: string) => `/channels/${channelId}/thread-members/@me`,
+	GUILD_THREADS_ACTIVE: (guildId: string) => `/guilds/${guildId}/threads/active`,
 	CHANNEL_CALL: (channelId: string) => `/channels/${channelId}/call`,
 	CHANNEL_CALL_RING: (channelId: string) => `/channels/${channelId}/call/ring`,
 	CHANNEL_CALL_STOP_RINGING: (channelId: string) => `/channels/${channelId}/call/stop-ringing`,

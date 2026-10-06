@@ -35,6 +35,7 @@ import type {MessageProcessingService} from '@app/api/channel/services/message/M
 import type {MessageSearchService} from '@app/api/channel/services/message/MessageSearchService';
 import type {MessageValidationService} from '@app/api/channel/services/message/MessageValidationService';
 import type {MessageWriteLock} from '@app/api/channel/services/message/MessageWriteLock';
+import type {ThreadService} from '@app/api/channel/services/thread/ThreadService';
 import {SYSTEM_USER_ID} from '@app/api/constants/Core';
 import type {MessageAttachment, MessageReference} from '@app/api/database/types/MessageTypes';
 import type {IFavoriteMemeRepository} from '@app/api/favorite_meme/IFavoriteMemeRepository';
@@ -103,6 +104,7 @@ interface MessageSendServiceDeps {
 	limitConfigService: LimitConfigService;
 	messageWriteLock: MessageWriteLock;
 	crosspostPropagation: CrosspostPropagation;
+	threadService: ThreadService;
 }
 
 interface SendMessageResult {
@@ -289,6 +291,9 @@ export class MessageSendService {
 				throw new FeatureTemporarilyDisabledError();
 			}
 			await checkPermission(Permissions.SEND_MESSAGES);
+			if (channel.isThread()) {
+				await checkPermission(Permissions.SEND_MESSAGES_IN_THREADS);
+			}
 			assertGuildMemberCanCommunicate(member);
 			if (data.tts) {
 				const hasTtsPermission = await hasPermission(Permissions.SEND_TTS_MESSAGES);
@@ -801,6 +806,12 @@ export class MessageSendService {
 			checkPermission,
 			hasPermission,
 		});
+		await this.deps.threadService.prepareThreadMessageSend({
+			channel,
+			userId: user.id,
+			hasPermission,
+			requestCache,
+		});
 		const needsSlowmodeCheck = guild && channel.rateLimitPerUser && channel.rateLimitPerUser > 0 && !user.isBot;
 		const slowmodeBypass = needsSlowmodeCheck ? await hasPermission(Permissions.BYPASS_SLOWMODE) : false;
 		const slowmodeKey = needsSlowmodeCheck && !slowmodeBypass ? `slowmode:${channelId}:${user.id}` : null;
@@ -969,6 +980,7 @@ export class MessageSendService {
 			allowEmbeds: canEmbedLinks,
 			dmNsfwContext,
 		});
+		await this.deps.threadService.recordThreadMessageCreated({channel, requestCache});
 		this.cacheMentionChannels({
 			requestCache,
 			messageId,

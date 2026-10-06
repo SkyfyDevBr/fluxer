@@ -114,14 +114,50 @@ is_category(ChannelId, State) ->
 ) ->
     boolean().
 base_has_view(Base, UserId, ChannelId, State) ->
-    Perms = guild_permissions:channel_permissions(Base, UserId, ChannelId, State),
-    permission_bits:has(Perms, constants:view_channel_permission()).
+    case thread_visibility_allows(UserId, ChannelId, Base, State) of
+        false ->
+            false;
+        true ->
+            Perms = guild_permissions:channel_permissions(Base, UserId, ChannelId, State),
+            permission_bits:has(Perms, constants:view_channel_permission())
+    end.
+
+-spec thread_visibility_allows(user_id(), channel_id(), guild_permissions:base_permissions(), guild_state()) ->
+    boolean().
+thread_visibility_allows(UserId, ChannelId, Perms, State) ->
+    case find_channel_by_id(ChannelId, State) of
+        Channel when is_map(Channel) ->
+            case is_private_thread(Channel) of
+                false ->
+                    true;
+                true ->
+                    MemberIds = map_utils:ensure_list(
+                        maps:get(<<"thread_member_ids">>, Channel, [])
+                    ),
+                    thread_member_id_matches(UserId, MemberIds) orelse
+                        permission_bits:has(Perms, constants:manage_threads_permission())
+            end;
+        _ ->
+            true
+    end.
+
+-spec is_private_thread(map()) -> boolean().
+is_private_thread(Channel) ->
+    guild_data_normalize_schema:int(maps:get(<<"type">>, Channel, undefined)) =:= 12.
+
+-spec thread_member_id_matches(user_id(), [term()]) -> boolean().
+thread_member_id_matches(UserId, MemberIds) ->
+    lists:any(
+        fun(MemberId) -> snowflake_id:parse_maybe(MemberId) =:= UserId end,
+        MemberIds
+    ).
 
 -spec can_view_channel_by_permissions(user_id(), channel_id(), maybe_member(), guild_state()) ->
     boolean().
 can_view_channel_by_permissions(UserId, ChannelId, Member, State) ->
     Perms = guild_permissions:compute_member_permissions(UserId, ChannelId, Member, State),
-    permission_bits:has(Perms, constants:view_channel_permission()).
+    thread_visibility_allows(UserId, ChannelId, Perms, State) andalso
+        permission_bits:has(Perms, constants:view_channel_permission()).
 
 -spec can_view_channel_members(user_id(), channel_id(), maybe_member(), guild_state()) ->
     boolean().

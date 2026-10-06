@@ -6,6 +6,7 @@
 -export([
     replace_item_by_id/3,
     remove_item_by_id/2,
+    find_item_by_id/2,
     bulk_update_items/2,
     needs_visibility_check/1
 ]).
@@ -44,6 +45,26 @@ remove_item_by_id(Items, Id) ->
         undefined -> Items;
         _ -> do_remove_items(Items, NormalizedId)
     end.
+
+-spec find_item_by_id([map()], term()) -> map() | undefined.
+find_item_by_id(Items, Id) ->
+    NormalizedId = snowflake_id:parse_optional(Id),
+    case NormalizedId of
+        undefined -> undefined;
+        _ -> find_matching_item(Items, NormalizedId)
+    end.
+
+-spec find_matching_item([map()], integer()) -> map() | undefined.
+find_matching_item([], _NormalizedId) ->
+    undefined;
+find_matching_item([Item | Rest], NormalizedId) when is_map(Item) ->
+    ItemId = snowflake_id:parse_optional(maps:get(<<"id">>, Item, undefined)),
+    case ItemId of
+        NormalizedId -> Item;
+        _ -> find_matching_item(Rest, NormalizedId)
+    end;
+find_matching_item([_ | Rest], NormalizedId) ->
+    find_matching_item(Rest, NormalizedId).
 
 -spec do_remove_items([map()], integer()) -> [map()].
 do_remove_items(Items, NormalizedId) ->
@@ -94,6 +115,10 @@ needs_visibility_check(guild_role_delete) -> true;
 needs_visibility_check(guild_member_update) -> true;
 needs_visibility_check(channel_update) -> true;
 needs_visibility_check(channel_update_bulk) -> true;
+needs_visibility_check(thread_create) -> true;
+needs_visibility_check(thread_update) -> true;
+needs_visibility_check(thread_delete) -> true;
+needs_visibility_check(thread_members_update) -> true;
 needs_visibility_check(_) -> false.
 
 -ifdef(TEST).

@@ -2,7 +2,7 @@
 
 import type {ChannelID, UserID} from '@app/api/BrandedTypes';
 import {userIdToChannelId} from '@app/api/BrandedTypes';
-import type {ChannelRow} from '@app/api/database/types/ChannelTypes';
+import {CHANNEL_THREAD_COLUMN_DEFAULTS, type ChannelRow} from '@app/api/database/types/ChannelTypes';
 import type {Channel} from '@app/api/models/Channel';
 import {ChannelTypes} from '@fluxer/constants/src/ChannelConstants';
 
@@ -17,6 +17,7 @@ export function isPersonalNotesChannelId({userId, channelId}: {userId: UserID; c
 
 function buildPersonalNotesChannelRow(userId: UserID): ChannelRow {
 	return {
+		...CHANNEL_THREAD_COLUMN_DEFAULTS,
 		channel_id: userIdToChannelId(userId),
 		guild_id: null,
 		type: ChannelTypes.DM_PERSONAL_NOTES,

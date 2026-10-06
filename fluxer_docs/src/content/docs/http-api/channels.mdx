@@ -42,6 +42,11 @@ A channel object always has its identity and type. Every other field is present 
 | content_warning_text?<sup>10</sup> | ?string | The content warning text stored on this channel, or null when the channel inherits |
 | rate_limit_per_user?<sup>11</sup> | integer | The slowmode interval in seconds, present only for a guild text, announcement, or voice channel |
 | nicks?<sup>12</sup> | map[snowflake, string] | The group direct message nicknames keyed by the decimal user ID (each 1-32 characters) |
+| thread_metadata? | ?[thread metadata](#thread-metadata-object) object | Archive settings, present only for a thread channel |
+| member_count? | ?integer | The approximate number of members, present only for a thread channel |
+| message_count? | ?integer | The approximate message count, excluding deleted messages and the starter, present only for a thread |
+| total_message_sent? | ?integer | Total messages ever sent; unlike message_count it does not drop when a message is deleted, present only for a thread |
+| thread_member? | ?[thread member](#thread-member-object) object | The caller's membership, present for a thread they joined when the endpoint asks for it |
 
 <sup>1</sup> Omitted when a group direct message stores no name, and never present on a direct message or on the personal notes channel
 
@@ -111,12 +116,68 @@ An age restriction and a content warning both resolve through this channel first
 | 3 | GROUP_DM | Group direct message channel |
 | 4 | GUILD_CATEGORY | Guild category, which owns no parent and no messages |
 | 5 | GUILD_ANNOUNCEMENT<sup>2</sup> | Guild text channel whose messages can be published to the channels that follow it |
+| 10 | GUILD_ANNOUNCEMENT_THREAD | Thread created in an announcement channel |
+| 11 | GUILD_PUBLIC_THREAD | Thread in a guild text channel that every member who can view the parent can join |
+| 12 | GUILD_PRIVATE_THREAD | Thread in a guild text channel visible only to its members and to members holding `MANAGE_THREADS` |
 | 998 | GUILD_LINK | Guild link channel, which has a destination URL and no messages |
 | 999 | DM_PERSONAL_NOTES<sup>1</sup> | Personal notes channel |
 
 <sup>1</sup> Its channel ID is exactly the owning user ID, and it has no recipient and no name. Fluxer creates it on first authenticated access
 
 <sup>2</sup> It has the fields and the slowmode of a guild text channel. [Announcement channels](/topics/announcement-channels/) describes publishing and following
+
+## Thread metadata object
+
+Thread archive settings. The object is present on every thread channel in `thread_metadata`.
+
+### Structure
+
+| Field | Type | Description |
+| --- | --- | --- |
+| archived | boolean | Whether the thread is archived |
+| auto_archive_duration | integer | Minutes of inactivity before automatic archiving: 60, 1440, 4320, or 10080 |
+| archive_timestamp | ISO8601 timestamp | When the archive status last changed; while the thread is active it holds the scheduled archive time |
+| locked | boolean | Whether the thread is locked; a locked thread cannot be unarchived or messaged without `MANAGE_THREADS` |
+| invitable? | ?boolean | Whether non-moderators can add members to a private thread; null for public threads |
+| create_timestamp? | ?ISO8601 timestamp | When the thread was created from a message; null for a thread created without one |
+
+### Example
+
+```json
+{
+  "archived": false,
+  "auto_archive_duration": 1440,
+  "archive_timestamp": "2026-01-01T00:00:00.000Z",
+  "locked": false,
+  "invitable": true,
+  "create_timestamp": "2025-12-31T23:59:00.000Z"
+}
+```
+
+## Thread member object
+
+A user's membership in a thread.
+
+### Structure
+
+| Field | Type | Description |
+| --- | --- | --- |
+| id | snowflake | The ID of the thread |
+| user_id | snowflake | The ID of the user |
+| join_timestamp | ISO8601 timestamp | When the member joined the thread |
+| flags | integer | User-thread settings; currently reserved and always 0 |
+| member? | [guild member](/http-api/guild-members/#guild-member-object) object | The guild member record for the user, present only when a bot requests it |
+
+### Example
+
+```json
+{
+  "id": "1501314428688998182",
+  "user_id": "1501314428688990000",
+  "join_timestamp": "2026-01-01T00:00:00.000Z",
+  "flags": 0
+}
+```
 
 ## Permission overwrite object
 
@@ -924,3 +985,437 @@ The counts are cached for 60 seconds, so a follow or unfollow can take up to a m
 ### Rate limit
 
 10 requests per 10 seconds for each authenticated user and channel ID, on the `channel:follower_stats::channel_id` bucket.
+
+## Start thread from message
+
+<RouteHeader method="POST" path="/v1/channels/{channel_id}/messages/{message_id}/threads" bot />
+
+Creates a public thread whose first message references an existing message in a guild text or announcement channel. The parent channel receives a `THREAD_CREATED` system message naming the thread.
+
+### Path parameters
+
+| Field | Type | Description |
+| --- | --- | --- |
+| channel_id | snowflake | The ID of the parent guild text or announcement channel |
+| message_id | snowflake | The ID of the message that becomes the thread starter |
+
+### JSON parameters
+
+| Field | Type | Description |
+| --- | --- | --- |
+| name | string | The name of the thread (1-100 characters) |
+| auto_archive_duration? | integer | Minutes of inactivity before archiving: 60, 1440, 4320, or 10080, default 1440 |
+| rate_limit_per_user? | ?integer | The slowmode interval in seconds |
+
+### Response
+
+| Status | Body | Condition |
+| --- | --- | --- |
+| 201 | [channel](#channel-object) object | Thread was created |
+| 400 | [error response](/http-api/#error-response) | The parent cannot host threads, the message is missing, the thread limit is reached, or a field is invalid |
+| 403 | [error response](/http-api/#error-response) | Caller lacks `SEND_MESSAGES` or `CREATE_PUBLIC_THREADS`, returning `MISSING_PERMISSIONS` |
+| 404 | [error response](/http-api/#error-response) | The parent channel or message does not exist |
+
+### Side effects
+
+Creates the thread channel, adds the caller as its owner and first member, posts a `THREAD_STARTER_MESSAGE` in the thread, posts a `THREAD_CREATED` system message in the parent, and emits [Thread Create](/gateway/events/#thread-create), plus a [Message Create](/gateway/events/#message-create) for each new message.
+
+### Rate limit
+
+5 requests per 10 seconds for each authenticated user and channel ID, on the `channel:thread:create::channel_id` bucket.
+
+## Start thread without message
+
+<RouteHeader method="POST" path="/v1/channels/{channel_id}/threads" bot />
+
+Creates a public or private thread in a guild text channel without a starter message. Private threads require `CREATE_PRIVATE_THREADS` and are invisible to non-members.
+
+### Path parameters
+
+| Field | Type | Description |
+| --- | --- | --- |
+| channel_id | snowflake | The ID of the parent guild text channel |
+
+### JSON parameters
+
+| Field | Type | Description |
+| --- | --- | --- |
+| name | string | The name of the thread (1-100 characters) |
+| type | integer | `11` for a public thread or `12` for a private thread |
+| auto_archive_duration? | integer | Minutes of inactivity before archiving: 60, 1440, 4320, or 10080, default 1440 |
+| rate_limit_per_user? | ?integer | The slowmode interval in seconds |
+| invitable? | boolean | Whether non-moderators can add members to a private thread, default true |
+
+### Response
+
+| Status | Body | Condition |
+| --- | --- | --- |
+| 201 | [channel](#channel-object) object | Thread was created |
+| 400 | [error response](/http-api/#error-response) | The parent cannot host threads, the thread limit is reached, or a field is invalid |
+| 403 | [error response](/http-api/#error-response) | Caller lacks `SEND_MESSAGES`, `CREATE_PUBLIC_THREADS`, or `CREATE_PRIVATE_THREADS`, returning `MISSING_PERMISSIONS` |
+| 404 | [error response](/http-api/#error-response) | The parent channel does not exist |
+
+### Side effects
+
+Creates the thread channel and adds the caller as its owner and first member. A public thread also posts a `THREAD_CREATED` system message in the parent. Emits [Thread Create](/gateway/events/#thread-create) to every member who can view the thread.
+
+### Rate limit
+
+5 requests per 10 seconds for each authenticated user and channel ID, on the `channel:thread:create::channel_id` bucket.
+
+## List channel active threads
+
+<RouteHeader method="GET" path="/v1/channels/{channel_id}/threads/active" bot />
+
+Returns the active (not archived) threads whose parent is this channel, together with the caller's thread memberships.
+
+### Path parameters
+
+| Field | Type | Description |
+| --- | --- | --- |
+| channel_id | snowflake | The ID of the parent channel |
+
+### Response
+
+| Status | Body | Condition |
+| --- | --- | --- |
+| 200 | [thread list](#thread-list-object) object | Active threads were returned |
+| 403 | [error response](/http-api/#error-response) | Caller cannot view the channel, returning `MISSING_PERMISSIONS` |
+| 404 | [error response](/http-api/#error-response) | The channel does not exist |
+
+### Rate limit
+
+100 requests per 10 seconds for each authenticated user and channel ID, on the `channel:thread:list::channel_id` bucket.
+
+## List guild active threads
+
+<RouteHeader method="GET" path="/v1/guilds/{guild_id}/threads/active" bot />
+
+Returns every active thread in the guild that the caller can view, together with the caller's thread memberships.
+
+### Path parameters
+
+| Field | Type | Description |
+| --- | --- | --- |
+| guild_id | snowflake | The ID of the guild |
+
+### Response
+
+| Status | Body | Condition |
+| --- | --- | --- |
+| 200 | [thread list](#thread-list-object) object | Active threads were returned |
+| 403 | [error response](/http-api/#error-response) | Caller is not a guild member, returning `MISSING_PERMISSIONS` |
+| 404 | [error response](/http-api/#error-response) | The guild does not exist |
+
+### Rate limit
+
+100 requests per 10 seconds for each authenticated user and channel ID, on the `channel:thread:list::channel_id` bucket.
+
+## List public archived threads
+
+<RouteHeader method="GET" path="/v1/channels/{channel_id}/threads/archived/public" bot />
+
+Returns archived public and announcement threads whose parent is this channel, newest archived first.
+
+### Path parameters
+
+| Field | Type | Description |
+| --- | --- | --- |
+| channel_id | snowflake | The ID of the parent channel |
+
+### Query parameters
+
+| Field | Type | Description |
+| --- | --- | --- |
+| before? | ISO8601 timestamp | Return only threads archived before this time |
+| limit? | integer | Page size from 1 to 100, default 50 |
+
+### Response
+
+| Status | Body | Condition |
+| --- | --- | --- |
+| 200 | [thread list](#thread-list-object) object | Archived threads were returned |
+| 403 | [error response](/http-api/#error-response) | Caller lacks `VIEW_CHANNEL` or `READ_MESSAGE_HISTORY`, returning `MISSING_PERMISSIONS` |
+| 404 | [error response](/http-api/#error-response) | The channel does not exist |
+
+### Rate limit
+
+100 requests per 10 seconds for each authenticated user and channel ID, on the `channel:thread:list::channel_id` bucket.
+
+## List private archived threads
+
+<RouteHeader method="GET" path="/v1/channels/{channel_id}/threads/archived/private" bot />
+
+Returns archived private threads whose parent is this channel. Requires `MANAGE_THREADS`.
+
+### Path parameters
+
+| Field | Type | Description |
+| --- | --- | --- |
+| channel_id | snowflake | The ID of the parent channel |
+
+### Query parameters
+
+| Field | Type | Description |
+| --- | --- | --- |
+| before? | ISO8601 timestamp | Return only threads archived before this time |
+| limit? | integer | Page size from 1 to 100, default 50 |
+
+### Response
+
+| Status | Body | Condition |
+| --- | --- | --- |
+| 200 | [thread list](#thread-list-object) object | Archived threads were returned |
+| 403 | [error response](/http-api/#error-response) | Caller lacks `MANAGE_THREADS`, returning `MISSING_PERMISSIONS` |
+| 404 | [error response](/http-api/#error-response) | The channel does not exist |
+
+### Rate limit
+
+100 requests per 10 seconds for each authenticated user and channel ID, on the `channel:thread:list::channel_id` bucket.
+
+## List joined private archived threads
+
+<RouteHeader method="GET" path="/v1/channels/{channel_id}/users/@me/threads/archived/private" bot />
+
+Returns archived private threads whose parent is this channel and that the caller has joined.
+
+### Path parameters
+
+| Field | Type | Description |
+| --- | --- | --- |
+| channel_id | snowflake | The ID of the parent channel |
+
+### Query parameters
+
+| Field | Type | Description |
+| --- | --- | --- |
+| before? | ISO8601 timestamp | Return only threads archived before this time |
+| limit? | integer | Page size from 1 to 100, default 50 |
+
+### Response
+
+| Status | Body | Condition |
+| --- | --- | --- |
+| 200 | [thread list](#thread-list-object) object | Archived threads were returned |
+| 403 | [error response](/http-api/#error-response) | Caller cannot view the channel, returning `MISSING_PERMISSIONS` |
+| 404 | [error response](/http-api/#error-response) | The channel does not exist |
+
+### Rate limit
+
+100 requests per 10 seconds for each authenticated user and channel ID, on the `channel:thread:list::channel_id` bucket.
+
+## List thread members
+
+<RouteHeader method="GET" path="/v1/channels/{channel_id}/thread-members" bot />
+
+Returns the members of a thread.
+
+### Path parameters
+
+| Field | Type | Description |
+| --- | --- | --- |
+| channel_id | snowflake | The ID of the thread |
+
+### Query parameters
+
+| Field | Type | Description |
+| --- | --- | --- |
+| with_member? | boolean | Include the full guild member record on each thread member, honoured only for bot callers |
+| after? | snowflake | Return members whose user ID sorts after this one |
+| limit? | integer | Page size from 1 to 100, default 100 |
+
+### Response
+
+| Status | Body | Condition |
+| --- | --- | --- |
+| 200 | array[[thread member](#thread-member-object) object] | Members were returned |
+| 404 | [error response](/http-api/#error-response) | The thread does not exist or the caller is not a member of a private thread, returning `UNKNOWN_CHANNEL` |
+
+### Rate limit
+
+100 requests per 10 seconds for each authenticated user and channel ID, on the `channel:thread:list::channel_id` bucket.
+
+## Get self thread member
+
+<RouteHeader method="GET" path="/v1/channels/{channel_id}/thread-members/@me" bot />
+
+Returns the caller's [thread member](#thread-member-object) object.
+
+### Path parameters
+
+| Field | Type | Description |
+| --- | --- | --- |
+| channel_id | snowflake | The ID of the thread |
+
+### Query parameters
+
+| Field | Type | Description |
+| --- | --- | --- |
+| with_member? | boolean | Include the full guild member record, honoured only for bot callers |
+
+### Response
+
+| Status | Body | Condition |
+| --- | --- | --- |
+| 200 | [thread member](#thread-member-object) object | Membership was returned |
+| 404 | [error response](/http-api/#error-response) | The thread is missing, the caller is not a member, or a private thread is hidden |
+
+### Rate limit
+
+100 requests per 10 seconds for each authenticated user and channel ID, on the `channel:thread:list::channel_id` bucket.
+
+## Get thread member
+
+<RouteHeader method="GET" path="/v1/channels/{channel_id}/thread-members/{user_id}" bot />
+
+Returns another user's [thread member](#thread-member-object) object.
+
+### Path parameters
+
+| Field | Type | Description |
+| --- | --- | --- |
+| channel_id | snowflake | The ID of the thread |
+| user_id | snowflake | The ID of the user |
+
+### Query parameters
+
+| Field | Type | Description |
+| --- | --- | --- |
+| with_member? | boolean | Include the full guild member record, honoured only for bot callers |
+
+### Response
+
+| Status | Body | Condition |
+| --- | --- | --- |
+| 200 | [thread member](#thread-member-object) object | Membership was returned |
+| 404 | [error response](/http-api/#error-response) | The thread is missing, the user is not a member, or a private thread is hidden |
+
+### Rate limit
+
+100 requests per 10 seconds for each authenticated user and channel ID, on the `channel:thread:list::channel_id` bucket.
+
+## Join thread
+
+<RouteHeader method="PUT" path="/v1/channels/{channel_id}/thread-members/@me" bot />
+
+Adds the caller to a public thread. Private threads can only be joined by being added.
+
+### Path parameters
+
+| Field | Type | Description |
+| --- | --- | --- |
+| channel_id | snowflake | The ID of the thread |
+
+### Response
+
+| Status | Body | Condition |
+| --- | --- | --- |
+| 204 | empty | Caller joined the thread |
+| 403 | [error response](/http-api/#error-response) | The thread is archived or locked, returning `THREAD_IS_LOCKED` |
+| 404 | [error response](/http-api/#error-response) | The thread does not exist or is private, returning `UNKNOWN_CHANNEL` |
+
+### Side effects
+
+Emits [Thread Members Update](/gateway/events/#thread-members-update). Sending a message in a public thread joins the author automatically.
+
+### Rate limit
+
+20 requests per 10 seconds for each authenticated user and channel ID, on the `channel:thread:member::channel_id` bucket.
+
+## Add thread member
+
+<RouteHeader method="PUT" path="/v1/channels/{channel_id}/thread-members/{user_id}" bot />
+
+Adds another guild member to a thread. The caller must be able to send messages in the thread, and adding to a private thread additionally requires `MANAGE_THREADS` unless the thread is invitable.
+
+### Path parameters
+
+| Field | Type | Description |
+| --- | --- | --- |
+| channel_id | snowflake | The ID of the thread |
+| user_id | snowflake | The ID of the user to add |
+
+### Response
+
+| Status | Body | Condition |
+| --- | --- | --- |
+| 204 | empty | Member was added |
+| 403 | [error response](/http-api/#error-response) | Caller lacks permission, the thread is not invitable, or it is archived or locked |
+| 404 | [error response](/http-api/#error-response) | The thread or target member does not exist, returning `UNKNOWN_CHANNEL` or `UNKNOWN_THREAD_MEMBER` |
+
+### Side effects
+
+Emits [Thread Members Update](/gateway/events/#thread-members-update) and increases the thread's member count.
+
+### Rate limit
+
+20 requests per 10 seconds for each authenticated user and channel ID, on the `channel:thread:member::channel_id` bucket.
+
+## Leave thread
+
+<RouteHeader method="DELETE" path="/v1/channels/{channel_id}/thread-members/@me" bot />
+
+Removes the caller from a thread.
+
+### Path parameters
+
+| Field | Type | Description |
+| --- | --- | --- |
+| channel_id | snowflake | The ID of the thread |
+
+### Response
+
+| Status | Body | Condition |
+| --- | --- | --- |
+| 204 | empty | Caller left the thread, or was not a member |
+| 403 | [error response](/http-api/#error-response) | The thread is archived or locked, returning `THREAD_IS_LOCKED` |
+| 404 | [error response](/http-api/#error-response) | The thread does not exist, returning `UNKNOWN_CHANNEL` |
+
+### Side effects
+
+Emits [Thread Members Update](/gateway/events/#thread-members-update) and decreases the thread's member count. The owner keeps ownership after leaving.
+
+### Rate limit
+
+20 requests per 10 seconds for each authenticated user and channel ID, on the `channel:thread:member::channel_id` bucket.
+
+## Remove thread member
+
+<RouteHeader method="DELETE" path="/v1/channels/{channel_id}/thread-members/{user_id}" bot />
+
+Removes another user from a thread. Requires `MANAGE_THREADS`, and the thread owner cannot be removed.
+
+### Path parameters
+
+| Field | Type | Description |
+| --- | --- | --- |
+| channel_id | snowflake | The ID of the thread |
+| user_id | snowflake | The ID of the user to remove |
+
+### Response
+
+| Status | Body | Condition |
+| --- | --- | --- |
+| 204 | empty | Member was removed |
+| 403 | [error response](/http-api/#error-response) | Caller lacks `MANAGE_THREADS`, returning `MISSING_PERMISSIONS` |
+| 404 | [error response](/http-api/#error-response) | The thread is missing, the target owns it, or the target is not a member (`UNKNOWN_CHANNEL` or `UNKNOWN_THREAD_MEMBER`) |
+
+### Side effects
+
+Emits [Thread Members Update](/gateway/events/#thread-members-update) and decreases the thread's member count.
+
+### Rate limit
+
+20 requests per 10 seconds for each authenticated user and channel ID, on the `channel:thread:member::channel_id` bucket.
+
+## Thread list object
+
+A page of threads returned by the active and archived thread endpoints.
+
+### Structure
+
+| Field | Type | Description |
+| --- | --- | --- |
+| threads | array[[channel](#channel-object) object] | The threads in the page |
+| members | array[[thread member](#thread-member-object) object] | The caller's membership for each thread in the page they have joined |
+| has_more? | boolean | Whether more threads exist beyond this page, present on archived listings |

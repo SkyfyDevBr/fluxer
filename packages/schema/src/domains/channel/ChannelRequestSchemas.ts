@@ -10,6 +10,8 @@ import {
 	CHANNEL_TOPIC_MIN_LENGTH,
 	RTC_REGION_ID_MAX_LENGTH,
 	RTC_REGION_ID_MIN_LENGTH,
+	THREAD_ARCHIVED_PAGE_LIMIT_DEFAULT,
+	THREAD_ARCHIVED_PAGE_LIMIT_MAX,
 	VOICE_CHANNEL_BITRATE_MAX,
 	VOICE_CHANNEL_BITRATE_MAX_STANDARD,
 	VOICE_CHANNEL_BITRATE_MIN,
@@ -20,7 +22,11 @@ import {
 } from '@fluxer/constants/src/LimitConstants';
 import {ChannelNicknameOverrides} from '@fluxer/schema/src/domains/channel/ChannelSchemas';
 import {ReadStateResponse} from '@fluxer/schema/src/domains/gateway/GatewaySchemas';
-import {ChannelOverwriteTypeSchema, GeneralChannelNameType} from '@fluxer/schema/src/primitives/ChannelValidators';
+import {
+	ChannelOverwriteTypeSchema,
+	GeneralChannelNameType,
+	ThreadAutoArchiveDurationType,
+} from '@fluxer/schema/src/primitives/ChannelValidators';
 import {base64LengthForBytes, createBase64StringType} from '@fluxer/schema/src/primitives/FileValidators';
 import {ContentWarningLevelSchema} from '@fluxer/schema/src/primitives/GuildValidators';
 import {QueryBooleanType} from '@fluxer/schema/src/primitives/QueryValidators';
@@ -210,6 +216,34 @@ const ChannelUpdateGroupDmRequest = z.object({
 	nicks: ChannelNicknameOverrides.nullish().describe('Custom nicknames for users in this group DM'),
 });
 
+const ChannelUpdateThreadRequest = z.object({
+	type: createNamedLiteralUnion(
+		[
+			[ChannelTypes.GUILD_ANNOUNCEMENT_THREAD, 'GUILD_ANNOUNCEMENT_THREAD', 'Channel type (announcement thread)'],
+			[ChannelTypes.GUILD_PUBLIC_THREAD, 'GUILD_PUBLIC_THREAD', 'Channel type (public thread)'],
+			[ChannelTypes.GUILD_PRIVATE_THREAD, 'GUILD_PRIVATE_THREAD', 'Channel type (private thread)'],
+		],
+		'Channel type (thread)',
+	),
+	name: GeneralChannelNameType.nullish().describe('The name of the thread'),
+	archived: z
+		.boolean()
+		.optional()
+		.describe('Whether the thread is archived; setting false unarchives it unless the thread is locked'),
+	auto_archive_duration: ThreadAutoArchiveDurationType.optional().describe(
+		'The duration in minutes before the thread is automatically archived',
+	),
+	locked: z.boolean().optional().describe('Whether the thread is locked; locked threads cannot be unarchived'),
+	invitable: z.boolean().optional().describe('Whether non-moderators can add other non-moderators to a private thread'),
+	rate_limit_per_user: z
+		.number()
+		.int()
+		.min(CHANNEL_RATE_LIMIT_PER_USER_MIN)
+		.max(CHANNEL_RATE_LIMIT_PER_USER_MAX)
+		.nullish()
+		.describe(`Slowmode delay in seconds (${CHANNEL_RATE_LIMIT_PER_USER_MIN}-${CHANNEL_RATE_LIMIT_PER_USER_MAX})`),
+});
+
 export const ChannelUpdateRequest = z.discriminatedUnion('type', [
 	ChannelUpdateTextRequest,
 	ChannelUpdateAnnouncementRequest,
@@ -217,6 +251,7 @@ export const ChannelUpdateRequest = z.discriminatedUnion('type', [
 	ChannelUpdateCategoryRequest,
 	ChannelUpdateLinkRequest,
 	ChannelUpdateGroupDmRequest,
+	ChannelUpdateThreadRequest,
 ]);
 
 export type ChannelUpdateRequest = z.infer<typeof ChannelUpdateRequest>;
@@ -244,6 +279,72 @@ export const PermissionOverwriteCreateRequest = z.object({
 });
 
 export type PermissionOverwriteCreateRequest = z.infer<typeof PermissionOverwriteCreateRequest>;
+
+const ThreadCreateBase = {
+	name: GeneralChannelNameType.describe('The name of the thread (1-100 characters)'),
+	auto_archive_duration: ThreadAutoArchiveDurationType.optional().describe(
+		'The duration in minutes before the thread is automatically archived',
+	),
+	rate_limit_per_user: z
+		.number()
+		.int()
+		.min(CHANNEL_RATE_LIMIT_PER_USER_MIN)
+		.max(CHANNEL_RATE_LIMIT_PER_USER_MAX)
+		.nullish()
+		.describe(`Slowmode delay in seconds (${CHANNEL_RATE_LIMIT_PER_USER_MIN}-${CHANNEL_RATE_LIMIT_PER_USER_MAX})`),
+} as const;
+
+export const ThreadCreateFromMessageRequest = z.object(ThreadCreateBase);
+
+export type ThreadCreateFromMessageRequest = z.infer<typeof ThreadCreateFromMessageRequest>;
+
+export const ThreadCreateRequest = z.discriminatedUnion('type', [
+	z.object({
+		...ThreadCreateBase,
+		type: createNamedLiteral(ChannelTypes.GUILD_PUBLIC_THREAD, 'GUILD_PUBLIC_THREAD', 'Channel type (public thread)'),
+	}),
+	z.object({
+		...ThreadCreateBase,
+		type: createNamedLiteral(
+			ChannelTypes.GUILD_PRIVATE_THREAD,
+			'GUILD_PRIVATE_THREAD',
+			'Channel type (private thread)',
+		),
+		invitable: z
+			.boolean()
+			.optional()
+			.describe('Whether non-moderators can add other non-moderators to a private thread'),
+	}),
+]);
+
+export type ThreadCreateRequest = z.infer<typeof ThreadCreateRequest>;
+
+export const ThreadListArchivedQuery = z.object({
+	before: z.iso.datetime().optional().describe('Return threads archived before this ISO8601 timestamp, for pagination'),
+	limit: z.coerce
+		.number()
+		.int()
+		.min(1)
+		.max(THREAD_ARCHIVED_PAGE_LIMIT_MAX)
+		.default(THREAD_ARCHIVED_PAGE_LIMIT_DEFAULT)
+		.describe('Maximum number of threads to return'),
+});
+
+export type ThreadListArchivedQuery = z.infer<typeof ThreadListArchivedQuery>;
+
+export const ThreadListMembersQuery = z.object({
+	with_member: QueryBooleanType.optional().describe('Whether to include a guild member object for each thread member'),
+	after: SnowflakeType.optional().describe('Return thread members whose user ID comes after this snowflake'),
+	limit: z.coerce.number().int().min(1).max(100).default(100).describe('Maximum number of members to return'),
+});
+
+export type ThreadListMembersQuery = z.infer<typeof ThreadListMembersQuery>;
+
+export const GetThreadMemberQuery = z.object({
+	with_member: QueryBooleanType.optional().describe('Whether to include a guild member object for the thread member'),
+});
+
+export type GetThreadMemberQuery = z.infer<typeof GetThreadMemberQuery>;
 
 export const DeleteChannelQuery = z.object({
 	silent: QueryBooleanType.describe('Whether to suppress the system message when leaving a group DM'),

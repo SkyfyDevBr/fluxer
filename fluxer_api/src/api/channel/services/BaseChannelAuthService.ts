@@ -211,6 +211,12 @@ export abstract class BaseChannelAuthService {
 			if (!allowed) throw new MissingPermissionsError();
 		};
 		await checkPermission(Permissions.VIEW_CHANNEL);
+		if (channel.isPrivateThread() && !channel.threadMemberIds.has(userId)) {
+			const canManageThreads = (channelPermissions & Permissions.MANAGE_THREADS) === Permissions.MANAGE_THREADS;
+			if (!canManageThreads) {
+				throw new UnknownChannelError();
+			}
+		}
 		const parentCategory = await this.getParentCategoryContentWarningView({
 			channel,
 			parentChannel: authContextResult.parentChannel,
@@ -226,7 +232,8 @@ export abstract class BaseChannelAuthService {
 			(channel.type === ChannelTypes.GUILD_TEXT ||
 				channel.type === ChannelTypes.GUILD_ANNOUNCEMENT ||
 				channel.type === ChannelTypes.GUILD_VOICE ||
-				channel.type === ChannelTypes.GUILD_LINK) &&
+				channel.type === ChannelTypes.GUILD_LINK ||
+				channel.isThread()) &&
 			requiresAgeVerification
 		) {
 			const user = await this.userRepository.findUnique(userId);

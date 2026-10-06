@@ -22,7 +22,13 @@ export const ChannelTextarea = observer(({channel, inputSuppressed = false}: Cha
 	let disabled = false;
 	if (channel.isPrivate()) {
 		disabled = forceNoSendMessages;
-	} else if (forceNoSendMessages || !Permission.can(Permissions.SEND_MESSAGES, channel)) {
+	} else if (
+		forceNoSendMessages ||
+		!Permission.can(Permissions.SEND_MESSAGES, channel) ||
+		(channel.isThread() &&
+			(!Permission.can(Permissions.SEND_MESSAGES_IN_THREADS, channel) ||
+				(channel.isLockedThread() && !Permission.can(Permissions.MANAGE_THREADS, channel))))
+	) {
 		disabled = true;
 	} else {
 		disabled = GuildMembers.isUserTimedOut(

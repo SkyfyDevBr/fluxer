@@ -9,7 +9,11 @@ import {
 	privateChannelLastMessageIdPatch,
 	privateChannelMetadataPatch,
 } from '@app/api/channel/PrivateChannelSnapshot';
-import type {ChannelRow, PrivateChannelRow} from '@app/api/database/types/ChannelTypes';
+import {
+	CHANNEL_THREAD_COLUMN_DEFAULTS,
+	type ChannelRow,
+	type PrivateChannelRow,
+} from '@app/api/database/types/ChannelTypes';
 import {ChannelTypes} from '@fluxer/constants/src/ChannelConstants';
 import {describe, expect, test} from 'vitest';
 
@@ -21,6 +25,7 @@ const LAST_MESSAGE = createMessageID(5000n);
 
 function gdmRow(overrides: Partial<ChannelRow> = {}): ChannelRow {
 	return {
+		...CHANNEL_THREAD_COLUMN_DEFAULTS,
 		channel_id: CHANNEL,
 		guild_id: null,
 		type: ChannelTypes.GROUP_DM,

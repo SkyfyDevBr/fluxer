@@ -14,7 +14,7 @@ import {
 	vanityCodeToInviteCode,
 } from '@app/api/BrandedTypes';
 import {Config} from '@app/api/Config';
-import {mapChannelToResponse} from '@app/api/channel/ChannelMappers';
+import {mapChannelToResponse, mapThreadToInternalResponse} from '@app/api/channel/ChannelMappers';
 import type {IChannelRepository} from '@app/api/channel/IChannelRepository';
 import {buildBroadcastMessageData} from '@app/api/channel/services/message/MessageGatewayDispatch';
 import {ensurePersonalNotesChannelExists} from '@app/api/channel/services/PersonalNotesChannelRepair';
@@ -1236,6 +1236,8 @@ export class RpcService {
 				return await this.handleGuildCollectionRolesRequest({guildId});
 			case 'channels':
 				return await this.handleGuildCollectionChannelsRequest({guildId, requestCache});
+			case 'threads':
+				return await this.handleGuildCollectionThreadsRequest({guildId, requestCache});
 			case 'emojis':
 				return await this.handleGuildCollectionEmojisRequest({guildId});
 			case 'stickers':
@@ -1257,6 +1259,7 @@ export class RpcService {
 			guild: undefined,
 			roles: undefined,
 			channels: undefined,
+			threads: undefined,
 			emojis: undefined,
 			stickers: undefined,
 			members: undefined,
@@ -1338,6 +1341,31 @@ export class RpcService {
 		return {
 			...this.createGuildCollectionResponse('channels'),
 			channels: mappedChannels,
+		};
+	}
+
+	private async handleGuildCollectionThreadsRequest({
+		guildId,
+		requestCache,
+	}: {
+		guildId: GuildID;
+		requestCache: RequestCache;
+	}): Promise<RpcResponseGuildCollectionData> {
+		await this.getGuildOrThrow(guildId);
+		const threads = await this.channelRepository.channelData.listGuildThreads(guildId);
+		const mappedThreads = await Promise.all(
+			threads.map((thread) =>
+				mapThreadToInternalResponse({
+					channel: thread,
+					currentUserId: null,
+					userCacheService: this.userCacheService,
+					requestCache,
+				}),
+			),
+		);
+		return {
+			...this.createGuildCollectionResponse('threads'),
+			threads: mappedThreads,
 		};
 	}
 

@@ -37,7 +37,11 @@ maybe_latch_stale_engines(Event, State) when
     Event =:= channel_create;
     Event =:= channel_update;
     Event =:= channel_update_bulk;
-    Event =:= channel_delete
+    Event =:= channel_delete;
+    Event =:= thread_create;
+    Event =:= thread_update;
+    Event =:= thread_delete;
+    Event =:= thread_members_update
 ->
     guild_member_list_engine_inputs:latch_stale(State);
 maybe_latch_stale_engines(_Event, State) ->
@@ -91,6 +95,14 @@ update_channel_event(channel_update_bulk, ED, D) ->
     guild_state_channels:handle_channel_update_bulk(ED, D);
 update_channel_event(channel_delete, ED, D) ->
     guild_state_channels:handle_channel_delete(ED, D);
+update_channel_event(thread_create, ED, D) ->
+    guild_state_channels:handle_thread_create(ED, D);
+update_channel_event(thread_update, ED, D) ->
+    guild_state_channels:handle_thread_update(ED, D);
+update_channel_event(thread_delete, ED, D) ->
+    guild_state_channels:handle_thread_delete(ED, D);
+update_channel_event(thread_members_update, ED, D) ->
+    guild_state_channels:handle_thread_members_update(ED, D);
 update_channel_event(message_create, ED, D) ->
     guild_state_channels:handle_message_create(ED, D);
 update_channel_event(channel_pins_update, ED, D) ->
@@ -130,6 +142,13 @@ handle_post_update(Event, EventData, OldState, NewState) when
     Event =:= channel_delete
 ->
     post_update_channel(Event, EventData, OldState, NewState);
+handle_post_update(Event, EventData, OldState, NewState) when
+    Event =:= thread_create;
+    Event =:= thread_update;
+    Event =:= thread_delete;
+    Event =:= thread_members_update
+->
+    post_update_thread(Event, EventData, OldState, NewState);
 handle_post_update(guild_member_remove, EventData, _OldState, NewState) ->
     post_update_member_remove(EventData, NewState);
 handle_post_update(Event, _EventData, OldState, NewState) ->
@@ -195,6 +214,22 @@ resync_channels_after_permission_change(ChanIds, OldState, NewState) ->
         ChanIds, Dispatched
     ),
     Dispatched.
+
+-spec post_update_thread(event(), event_data(), guild_state(), guild_state()) ->
+    guild_state().
+post_update_thread(thread_create, _EventData, _OldState, NewState) ->
+    maybe_sync_member_list_permission_state(NewState),
+    NewState;
+post_update_thread(thread_update, EventData, OldState, NewState) ->
+    ChanIds = guild_state_channels:extract_channel_ids_from_channel_update(EventData),
+    resync_channels_after_permission_change(ChanIds, OldState, NewState);
+post_update_thread(thread_delete, EventData, _OldState, NewState) ->
+    maybe_sync_member_list_permission_state(NewState),
+    ChannelId = snowflake_id:parse_optional(maps:get(<<"id">>, EventData, undefined)),
+    ok = guild_voice_lifecycle:cast_disconnect_all_voice_users_in_channel(ChannelId, NewState),
+    NewState;
+post_update_thread(thread_members_update, _EventData, OldState, NewState) ->
+    guild_visibility:compute_and_dispatch_visibility_changes(OldState, NewState).
 
 -spec post_update_member_remove(event_data(), guild_state()) -> guild_state().
 post_update_member_remove(EventData, NewState) ->

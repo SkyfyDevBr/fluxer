@@ -12,6 +12,7 @@ import {
 	createMessageResponseDataService,
 	messageResponseAccessForGuild,
 } from '@app/api/channel/services/message/MessageResponseDataService';
+import {CHANNEL_THREAD_COLUMN_DEFAULTS} from '@app/api/database/types/ChannelTypes';
 import {emitActivity} from '@app/api/infrastructure/activity/ActivityEvents';
 import type {IGatewayService} from '@app/api/infrastructure/IGatewayService';
 import type {ISnowflakeService} from '@app/api/infrastructure/ISnowflakeService';
@@ -513,6 +514,7 @@ export class UserChannelService {
 		const channelId = createChannelID(await this.snowflakeService.generate());
 		const allRecipients = new Set([userId, ...recipientIds]);
 		const channelData = {
+			...CHANNEL_THREAD_COLUMN_DEFAULTS,
 			channel_id: channelId,
 			guild_id: null,
 			type: ChannelTypes.GROUP_DM,

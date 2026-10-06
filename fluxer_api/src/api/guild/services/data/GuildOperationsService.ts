@@ -10,7 +10,7 @@ import {
 import type {ChannelService} from '@app/api/channel/services/ChannelService';
 import {getContentMessage} from '@app/api/content_i18n/ContentI18n';
 import {BatchBuilder} from '@app/api/database/CassandraQueryExecution';
-import type {PermissionOverwrite} from '@app/api/database/types/ChannelTypes';
+import {CHANNEL_THREAD_COLUMN_DEFAULTS, type PermissionOverwrite} from '@app/api/database/types/ChannelTypes';
 import type {GuildRow} from '@app/api/database/types/GuildTypes';
 import {mapGuildToGuildResponse, mapGuildToPartialResponse} from '@app/api/guild/GuildModel';
 import type {IGuildDiscoveryRepository} from '@app/api/guild/repositories/GuildDiscoveryRepository';
@@ -830,6 +830,7 @@ export class GuildOperationsService {
 		) => {
 			batch.addPrepared(
 				Channels.insert({
+					...CHANNEL_THREAD_COLUMN_DEFAULTS,
 					channel_id: channelId,
 					guild_id: guildId,
 					type,
@@ -1050,6 +1051,7 @@ export class GuildOperationsService {
 			}
 			batch.addPrepared(
 				Channels.insert({
+					...CHANNEL_THREAD_COLUMN_DEFAULTS,
 					channel_id: channelId,
 					guild_id: guildId,
 					type: fluxerType,
@@ -1102,6 +1104,7 @@ export class GuildOperationsService {
 			systemChannelId = createChannelID(await this.snowflakeService.generate());
 			batch.addPrepared(
 				Channels.insert({
+					...CHANNEL_THREAD_COLUMN_DEFAULTS,
 					channel_id: systemChannelId,
 					guild_id: guildId,
 					type: ChannelTypes.GUILD_TEXT,

@@ -70,3 +70,7 @@ export const SHOW_MEMBERS_DESCRIPTOR = msg({
 	message: 'Show members',
 	comment: 'Tooltip on the channel header members toggle when the members panel is currently hidden.',
 });
+export const THREADS_DESCRIPTOR = msg({
+	message: 'Threads',
+	comment: 'Tooltip on the channel header button that opens the thread browser for the channel.',
+});

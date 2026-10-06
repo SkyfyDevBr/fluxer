@@ -6,6 +6,7 @@ import {
 	privateChannelLastMessageIdPatch,
 	privateChannelMetadataPatch,
 } from '@app/api/channel/PrivateChannelSnapshot';
+import type {ThreadCounterDelta} from '@app/api/channel/repositories/IChannelDataRepository';
 import {IChannelDataRepository} from '@app/api/channel/repositories/IChannelDataRepository';
 import {
 	BatchBuilder,
@@ -14,14 +15,15 @@ import {
 	fetchOne,
 	upsertOne,
 } from '@app/api/database/CassandraQueryExecution';
-import {Db} from '@app/api/database/CassandraTypes';
+import {Db, type DbOp} from '@app/api/database/CassandraTypes';
 import {buildPatchFromData, executeVersionedUpdate} from '@app/api/database/CassandraVersionedUpdate';
-import type {ChannelRow} from '@app/api/database/types/ChannelTypes';
+import type {ChannelRow, ThreadMemberRow} from '@app/api/database/types/ChannelTypes';
 import {CHANNEL_COLUMNS} from '@app/api/database/types/ChannelTypes';
 import {Logger} from '@app/api/Logger';
 import type {RequestCache} from '@app/api/middleware/RequestCacheMiddleware';
 import {Channel} from '@app/api/models/Channel';
-import {Channels, ChannelsByGuild, PrivateChannels} from '@app/api/Tables';
+import {Channels, ChannelsByGuild, PrivateChannels, ThreadMembers} from '@app/api/Tables';
+import {THREAD_CHANNEL_TYPES} from '@fluxer/constants/src/ChannelConstants';
 
 const FETCH_CHANNEL_BY_ID = Channels.select({
 	where: [Channels.where.eq('channel_id'), Channels.where.eq('soft_deleted')],
@@ -32,6 +34,13 @@ const FETCH_CHANNELS_BY_IDS = Channels.select({
 });
 const FETCH_GUILD_CHANNELS_BY_GUILD_ID = ChannelsByGuild.select({
 	where: ChannelsByGuild.where.eq('guild_id'),
+});
+const FETCH_THREAD_MEMBER = ThreadMembers.select({
+	where: [ThreadMembers.where.eq('channel_id'), ThreadMembers.where.eq('user_id')],
+	limit: 1,
+});
+const FETCH_THREAD_MEMBERS_BY_CHANNEL = ThreadMembers.select({
+	where: ThreadMembers.where.eq('channel_id'),
 });
 const FETCH_OPEN_PRIVATE_CHANNEL_TARGET = PrivateChannels.selectCql({
 	columns: ['user_id'],
@@ -196,16 +205,25 @@ export class ChannelDataRepository extends IChannelDataRepository {
 	}
 
 	async listGuildChannels(guildId: GuildID): Promise<Array<Channel>> {
+		const channels = await this.listGuildChannelRows(guildId);
+		return channels.filter((channel) => !THREAD_CHANNEL_TYPES.has(channel.type)).map((channel) => new Channel(channel));
+	}
+
+	async listGuildThreads(guildId: GuildID): Promise<Array<Channel>> {
+		const channels = await this.listGuildChannelRows(guildId);
+		return channels.filter((channel) => THREAD_CHANNEL_TYPES.has(channel.type)).map((channel) => new Channel(channel));
+	}
+
+	private async listGuildChannelRows(guildId: GuildID): Promise<Array<ChannelRow>> {
 		const guildChannels = await fetchMany<{
 			channel_id: bigint;
 		}>(FETCH_GUILD_CHANNELS_BY_GUILD_ID.bind({guild_id: guildId}));
 		if (guildChannels.length === 0) return [];
 		const channelIds = guildChannels.map((c) => c.channel_id);
-		const channels = await fetchManyInChunks<ChannelRow>(FETCH_CHANNELS_BY_IDS, channelIds, (chunk) => ({
+		return fetchManyInChunks<ChannelRow>(FETCH_CHANNELS_BY_IDS, channelIds, (chunk) => ({
 			channel_ids: chunk,
 			soft_deleted: false,
 		}));
-		return channels.map((channel) => new Channel(channel));
 	}
 
 	async listChannels(channelIds: Array<ChannelID>): Promise<Array<Channel>> {
@@ -218,9 +236,54 @@ export class ChannelDataRepository extends IChannelDataRepository {
 	}
 
 	async countGuildChannels(guildId: GuildID): Promise<number> {
-		const guildChannels = await fetchMany<{
-			channel_id: bigint;
-		}>(FETCH_GUILD_CHANNELS_BY_GUILD_ID.bind({guild_id: guildId}));
-		return guildChannels.length;
+		const channels = await this.listGuildChannelRows(guildId);
+		return channels.filter((channel) => !THREAD_CHANNEL_TYPES.has(channel.type)).length;
+	}
+
+	async findThreadMember(channelId: ChannelID, userId: UserID): Promise<ThreadMemberRow | null> {
+		const row = await fetchOne<ThreadMemberRow>(FETCH_THREAD_MEMBER.bind({channel_id: channelId, user_id: userId}));
+		return row ?? null;
+	}
+
+	async listThreadMembers(channelId: ChannelID): Promise<Array<ThreadMemberRow>> {
+		return fetchMany<ThreadMemberRow>(FETCH_THREAD_MEMBERS_BY_CHANNEL.bind({channel_id: channelId}));
+	}
+
+	async upsertThreadMember(row: ThreadMemberRow): Promise<void> {
+		this.requestCache?.channels.delete(row.channel_id);
+		await upsertOne(ThreadMembers.upsertAll(row));
+	}
+
+	async deleteThreadMember(channelId: ChannelID, userId: UserID): Promise<void> {
+		this.requestCache?.channels.delete(channelId);
+		await upsertOne(ThreadMembers.deleteByPk({channel_id: channelId, user_id: userId}));
+	}
+
+	async deleteThreadMembers(channelId: ChannelID): Promise<void> {
+		this.requestCache?.channels.delete(channelId);
+		await upsertOne(ThreadMembers.deletePartition({channel_id: channelId}));
+	}
+
+	async adjustThreadCounters(channelId: ChannelID, delta: ThreadCounterDelta): Promise<void> {
+		this.requestCache?.channels.delete(channelId);
+		type Patch = Partial<Record<'message_count' | 'total_message_sent' | 'member_count', DbOp<number>>>;
+		await executeVersionedUpdate<ChannelRow, 'channel_id' | 'soft_deleted'>(
+			async () => fetchOne<ChannelRow>(FETCH_CHANNEL_BY_ID.bind({channel_id: channelId, soft_deleted: false})),
+			(current): {pk: {channel_id: ChannelID; soft_deleted: boolean}; patch: Patch} => {
+				if (!current) return {pk: {channel_id: channelId, soft_deleted: false}, patch: {}};
+				const messageCount = Math.max(0, (current.message_count ?? 0) + (delta.messageCount ?? 0));
+				const totalMessageSent = Math.max(0, (current.total_message_sent ?? 0) + (delta.totalMessageSent ?? 0));
+				const memberCount = Math.max(0, (current.member_count ?? 0) + (delta.memberCount ?? 0));
+				return {
+					pk: {channel_id: channelId, soft_deleted: false},
+					patch: {
+						message_count: Db.set(messageCount),
+						total_message_sent: Db.set(totalMessageSent),
+						member_count: Db.set(memberCount),
+					},
+				};
+			},
+			Channels,
+		);
 	}
 }

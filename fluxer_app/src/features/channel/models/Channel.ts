@@ -4,9 +4,19 @@ import RuntimeConfig from '@app/features/app/state/RuntimeConfig';
 import {noteText} from '@app/features/theme/fonts/ScriptFontLoader';
 import UserPinnedDM from '@app/features/user/state/UserPinnedDM';
 import Users from '@app/features/user/state/Users';
-import {ChannelTypes, GUILD_TEXT_BASED_CHANNEL_TYPES, Permissions} from '@fluxer/constants/src/ChannelConstants';
+import {
+	ChannelTypes,
+	GUILD_TEXT_BASED_CHANNEL_TYPES,
+	Permissions,
+	TEXT_BASED_CHANNEL_TYPES,
+	THREAD_CHANNEL_TYPES,
+} from '@fluxer/constants/src/ChannelConstants';
 import {VOICE_CHANNEL_CONNECTION_LIMIT_DEFAULT} from '@fluxer/constants/src/LimitConstants';
-import type {ChannelOverwrite, Channel as WireChannel} from '@fluxer/schema/src/domains/channel/ChannelSchemas';
+import type {
+	ChannelOverwrite,
+	ThreadMetadataResponse,
+	Channel as WireChannel,
+} from '@fluxer/schema/src/domains/channel/ChannelSchemas';
 import type {UserPartial} from '@fluxer/schema/src/domains/user/UserResponseSchemas';
 import * as SnowflakeUtils from '@fluxer/snowflake/src/SnowflakeUtils';
 
@@ -82,6 +92,10 @@ export class Channel {
 	readonly contentWarningText: string | null;
 	readonly rateLimitPerUser: number;
 	readonly nicks: Readonly<Record<string, string>>;
+	readonly threadMetadata: ThreadMetadataResponse | null;
+	readonly memberCount: number | null;
+	readonly messageCount: number | null;
+	readonly totalMessageSent: number | null;
 
 	constructor(channel: WireChannel, options?: ChannelRecordOptions) {
 		this.instanceId = options?.instanceId ?? RuntimeConfig.localInstanceDomain;
@@ -110,6 +124,10 @@ export class Channel {
 		this.contentWarningText = channel.content_warning_text ?? null;
 		this.rateLimitPerUser = channel.rate_limit_per_user ?? 0;
 		this.nicks = channel.nicks ?? {};
+		this.threadMetadata = channel.thread_metadata ?? null;
+		this.memberCount = channel.member_count ?? null;
+		this.messageCount = channel.message_count ?? null;
+		this.totalMessageSent = channel.total_message_sent ?? null;
 		if ((this.type === ChannelTypes.DM || this.type === ChannelTypes.GROUP_DM) && channel.recipients) {
 			Users?.cacheUsers(Array.from(channel.recipients));
 		}
@@ -170,6 +188,30 @@ export class Channel {
 
 	isGuildCategory(): boolean {
 		return this.type === ChannelTypes.GUILD_CATEGORY;
+	}
+
+	isThread(): boolean {
+		return THREAD_CHANNEL_TYPES.has(this.type);
+	}
+
+	isPrivateThread(): boolean {
+		return this.type === ChannelTypes.GUILD_PRIVATE_THREAD;
+	}
+
+	isPublicThread(): boolean {
+		return this.type === ChannelTypes.GUILD_PUBLIC_THREAD || this.type === ChannelTypes.GUILD_ANNOUNCEMENT_THREAD;
+	}
+
+	isMessageable(): boolean {
+		return TEXT_BASED_CHANNEL_TYPES.has(this.type);
+	}
+
+	isArchivedThread(): boolean {
+		return this.threadMetadata?.archived === true;
+	}
+
+	isLockedThread(): boolean {
+		return this.threadMetadata?.locked === true;
 	}
 
 	isVoice(): boolean {
@@ -255,6 +297,11 @@ export class Channel {
 					updates.content_warning_text !== undefined ? updates.content_warning_text : this.contentWarningText,
 				rate_limit_per_user: updates.rate_limit_per_user ?? this.rateLimitPerUser,
 				nicks: updates.nicks ?? this.nicks,
+				thread_metadata: updates.thread_metadata !== undefined ? updates.thread_metadata : this.threadMetadata,
+				member_count: updates.member_count !== undefined ? updates.member_count : this.memberCount,
+				message_count: updates.message_count !== undefined ? updates.message_count : this.messageCount,
+				total_message_sent:
+					updates.total_message_sent !== undefined ? updates.total_message_sent : this.totalMessageSent,
 			},
 			{instanceId: this.instanceId},
 		);
@@ -300,6 +347,16 @@ export class Channel {
 		if (this.contentWarningLevel !== other.contentWarningLevel) return false;
 		if (this.contentWarningText !== other.contentWarningText) return false;
 		if (this.rateLimitPerUser !== other.rateLimitPerUser) return false;
+		if ((this.threadMetadata?.archived ?? false) !== (other.threadMetadata?.archived ?? false)) return false;
+		if ((this.threadMetadata?.locked ?? false) !== (other.threadMetadata?.locked ?? false)) return false;
+		if (
+			(this.threadMetadata?.auto_archive_duration ?? null) !== (other.threadMetadata?.auto_archive_duration ?? null)
+		) {
+			return false;
+		}
+		if (this.memberCount !== other.memberCount) return false;
+		if (this.messageCount !== other.messageCount) return false;
+		if (this.totalMessageSent !== other.totalMessageSent) return false;
 		if (this.recipientIds.length !== other.recipientIds.length) return false;
 		for (let i = 0; i < this.recipientIds.length; i++) {
 			if (this.recipientIds[i] !== other.recipientIds[i]) return false;
@@ -345,6 +402,10 @@ export class Channel {
 			content_warning_text: this.contentWarningText,
 			rate_limit_per_user: this.rateLimitPerUser,
 			nicks: this.nicks,
+			thread_metadata: this.threadMetadata,
+			member_count: this.memberCount,
+			message_count: this.messageCount,
+			total_message_sent: this.totalMessageSent,
 		};
 	}
 }

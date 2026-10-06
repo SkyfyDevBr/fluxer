@@ -3,8 +3,20 @@
 import type {ChannelID, GuildID, MessageID, RoleID, UserID} from '@app/api/BrandedTypes';
 import type {ChannelRow, PermissionOverwrite} from '@app/api/database/types/ChannelTypes';
 import {ChannelPermissionOverwrite} from '@app/api/models/ChannelPermissionOverwrite';
-import {type ChannelType, ChannelTypes} from '@fluxer/constants/src/ChannelConstants';
-import {VOICE_CHANNEL_CONNECTION_LIMIT_DEFAULT} from '@fluxer/constants/src/LimitConstants';
+import {type ChannelType, ChannelTypes, THREAD_CHANNEL_TYPES} from '@fluxer/constants/src/ChannelConstants';
+import {
+	THREAD_AUTO_ARCHIVE_DURATION_DEFAULT,
+	VOICE_CHANNEL_CONNECTION_LIMIT_DEFAULT,
+} from '@fluxer/constants/src/LimitConstants';
+
+export interface ChannelThreadMetadata {
+	readonly archived: boolean;
+	readonly autoArchiveDuration: number;
+	readonly archiveTimestamp: Date | null;
+	readonly locked: boolean;
+	readonly invitable: boolean;
+	readonly createTimestamp: Date | null;
+}
 
 export class Channel {
 	readonly id: ChannelID;
@@ -31,6 +43,11 @@ export class Channel {
 	readonly lastPinTimestamp: Date | null;
 	readonly permissionOverwrites: Map<RoleID | UserID, ChannelPermissionOverwrite>;
 	readonly nicknames: Map<string, string>;
+	readonly threadMetadata: ChannelThreadMetadata | null;
+	readonly threadMemberIds: Set<UserID>;
+	readonly memberCount: number;
+	readonly messageCount: number;
+	readonly totalMessageSent: number;
 	readonly isSoftDeleted: boolean;
 	readonly indexedAt: Date | null;
 	readonly version: number;
@@ -67,9 +84,31 @@ export class Channel {
 			}
 		}
 		this.nicknames = row.nicks ?? new Map();
+		this.threadMetadata = this.isThread()
+			? {
+					archived: row.thread_archived ?? false,
+					autoArchiveDuration: row.thread_auto_archive_duration ?? THREAD_AUTO_ARCHIVE_DURATION_DEFAULT,
+					archiveTimestamp: row.thread_archive_timestamp ?? null,
+					locked: row.thread_locked ?? false,
+					invitable: row.thread_invitable ?? true,
+					createTimestamp: row.thread_create_timestamp ?? null,
+				}
+			: null;
+		this.threadMemberIds = row.thread_member_ids ?? new Set();
+		this.memberCount = row.member_count ?? 0;
+		this.messageCount = row.message_count ?? 0;
+		this.totalMessageSent = row.total_message_sent ?? 0;
 		this.isSoftDeleted = row.soft_deleted;
 		this.indexedAt = row.indexed_at ?? null;
 		this.version = row.version;
+	}
+
+	isThread(): boolean {
+		return THREAD_CHANNEL_TYPES.has(this.type);
+	}
+
+	isPrivateThread(): boolean {
+		return this.type === ChannelTypes.GUILD_PRIVATE_THREAD;
 	}
 
 	toRow(): ChannelRow {
@@ -106,6 +145,16 @@ export class Channel {
 			last_pin_timestamp: this.lastPinTimestamp,
 			permission_overwrites: permOverwritesMap,
 			nicks: this.nicknames.size > 0 ? this.nicknames : null,
+			thread_archived: this.threadMetadata?.archived ?? null,
+			thread_auto_archive_duration: this.threadMetadata?.autoArchiveDuration ?? null,
+			thread_archive_timestamp: this.threadMetadata?.archiveTimestamp ?? null,
+			thread_locked: this.threadMetadata?.locked ?? null,
+			thread_invitable: this.threadMetadata?.invitable ?? null,
+			thread_create_timestamp: this.threadMetadata?.createTimestamp ?? null,
+			thread_member_ids: this.threadMemberIds.size > 0 ? this.threadMemberIds : null,
+			member_count: this.memberCount,
+			message_count: this.messageCount,
+			total_message_sent: this.totalMessageSent,
 			soft_deleted: this.isSoftDeleted,
 			indexed_at: this.indexedAt,
 			version: this.version,

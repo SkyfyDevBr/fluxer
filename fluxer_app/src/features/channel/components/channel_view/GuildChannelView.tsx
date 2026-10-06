@@ -22,6 +22,8 @@ import {useChannelSearchState} from '@app/features/channel/components/channel_vi
 import {useVoiceCallChromePinState} from '@app/features/channel/components/channel_view/useVoiceCallChromePinState';
 import {MatureContentChannelGate} from '@app/features/channel/components/MatureContentChannelGate';
 import {useMessagesBottomBarVisibility} from '@app/features/channel/components/MessagesBottomBarVisibility';
+import {ThreadChannelBanner} from '@app/features/channel/components/ThreadChannelBanner';
+import threadBannerStyles from '@app/features/channel/components/ThreadChannelBanner.module.css';
 import {VerificationBarrier} from '@app/features/channel/components/VerificationBarrier';
 import {useChannelMemberListVisibility} from '@app/features/channel/hooks/useChannelMemberListVisibility';
 import {useChannelSearchVisibility} from '@app/features/channel/hooks/useChannelSearchVisibility';
@@ -339,6 +341,9 @@ export const GuildChannelView = observer(({channelId, guildId}: GuildChannelView
 			</div>
 		);
 	}
+	const threadBanner = channel.isThread() ? (
+		<ThreadChannelBanner channel={channel} data-flx="channel.channel-view.guild-channel-view.thread-channel-banner" />
+	) : null;
 	const voiceJoinEmptyState = isVoiceChannel ? (
 		<VoiceChannelJoinEmptyState
 			channel={channel}
@@ -499,19 +504,22 @@ export const GuildChannelView = observer(({channelId, guildId}: GuildChannelView
 					</div>
 				}
 				chatArea={
-					<ChannelChatLayout
-						messages={
-							<Messages
-								key={channel.id}
-								channel={channel}
-								allowAutoAck={!isVoiceTextCallExpanded}
-								onBottomBarVisibilityChange={onBottomBarVisibilityChange}
-								data-flx="channel.channel-view.guild-channel-view.messages"
-							/>
-						}
-						textarea={renderChatArea(isVoiceTextCallExpanded)}
-						data-flx="channel.channel-view.guild-channel-view.channel-chat-layout"
-					/>
+					<div className={threadBannerStyles.chatAreaWithBanner}>
+						{threadBanner}
+						<ChannelChatLayout
+							messages={
+								<Messages
+									key={channel.id}
+									channel={channel}
+									allowAutoAck={!isVoiceTextCallExpanded}
+									onBottomBarVisibilityChange={onBottomBarVisibilityChange}
+									data-flx="channel.channel-view.guild-channel-view.messages"
+								/>
+							}
+							textarea={renderChatArea(isVoiceTextCallExpanded)}
+							data-flx="channel.channel-view.guild-channel-view.channel-chat-layout"
+						/>
+					</div>
 				}
 				sidePanel={
 					isSearchPanelVisible ? (
@@ -554,18 +562,21 @@ export const GuildChannelView = observer(({channelId, guildId}: GuildChannelView
 				/>
 			}
 			chatArea={
-				<ChannelChatLayout
-					messages={
-						<Messages
-							key={channel.id}
-							channel={channel}
-							onBottomBarVisibilityChange={onBottomBarVisibilityChange}
-							data-flx="channel.channel-view.guild-channel-view.messages--2"
-						/>
-					}
-					textarea={renderChatArea()}
-					data-flx="channel.channel-view.guild-channel-view.channel-chat-layout--2"
-				/>
+				<div className={threadBannerStyles.chatAreaWithBanner}>
+					{threadBanner}
+					<ChannelChatLayout
+						messages={
+							<Messages
+								key={channel.id}
+								channel={channel}
+								onBottomBarVisibilityChange={onBottomBarVisibilityChange}
+								data-flx="channel.channel-view.guild-channel-view.messages--2"
+							/>
+						}
+						textarea={renderChatArea()}
+						data-flx="channel.channel-view.guild-channel-view.channel-chat-layout--2"
+					/>
+				</div>
 			}
 			sidePanel={
 				isSearchPanelVisible ? (

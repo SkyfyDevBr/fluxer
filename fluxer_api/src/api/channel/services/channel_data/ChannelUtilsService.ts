@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
 import type {MessageID, UserID} from '@app/api/BrandedTypes';
-import {mapChannelToResponse} from '@app/api/channel/ChannelMappers';
+import {mapChannelToResponse, mapThreadToInternalResponse} from '@app/api/channel/ChannelMappers';
 import type {IChannelRepositoryAggregate} from '@app/api/channel/repositories/IChannelRepositoryAggregate';
 import {dispatchChannelEvent} from '@app/api/channel/services/ChannelGatewayDispatch';
 import {dispatchMessageCreateBroadcast} from '@app/api/channel/services/message/MessageGatewayDispatch';
@@ -90,6 +90,53 @@ export class ChannelUtilsService {
 			event: 'CHANNEL_DELETE',
 			data: channelResponse,
 		});
+	}
+
+	async dispatchThreadUpdate({channel, requestCache}: {channel: Channel; requestCache: RequestCache}): Promise<void> {
+		const data = await mapThreadToInternalResponse({
+			channel,
+			currentUserId: null,
+			userCacheService: this.userCacheService,
+			requestCache,
+		});
+		await this.gatewayService.dispatchGuild({guildId: channel.guildId!, event: 'THREAD_UPDATE', data});
+	}
+
+	async dispatchThreadDelete({channel, requestCache}: {channel: Channel; requestCache: RequestCache}): Promise<void> {
+		const data = await mapThreadToInternalResponse({
+			channel,
+			currentUserId: null,
+			userCacheService: this.userCacheService,
+			requestCache,
+		});
+		await this.gatewayService.dispatchGuild({guildId: channel.guildId!, event: 'THREAD_DELETE', data});
+	}
+
+	async dispatchThreadMembersUpdate({
+		channel,
+		addedMembers,
+		removedMemberIds,
+		requestCache: _requestCache,
+	}: {
+		channel: Channel;
+		addedMembers: Array<{
+			id: string;
+			user_id: string;
+			join_timestamp: string;
+			flags: number;
+			member?: unknown;
+		}>;
+		removedMemberIds: Array<string>;
+		requestCache: RequestCache;
+	}): Promise<void> {
+		const data = {
+			id: channel.id.toString(),
+			guild_id: channel.guildId?.toString(),
+			member_count: channel.memberCount,
+			added_members: addedMembers,
+			removed_member_ids: removedMemberIds,
+		};
+		await this.gatewayService.dispatchGuild({guildId: channel.guildId!, event: 'THREAD_MEMBERS_UPDATE', data});
 	}
 
 	async dispatchDmChannelDelete({

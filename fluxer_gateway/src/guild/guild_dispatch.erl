@@ -76,6 +76,8 @@ process_dispatch(Event, EventData, State) ->
 -spec filter_state_for_event(event(), guild_state(), guild_state()) -> guild_state().
 filter_state_for_event(channel_delete, PreviousState, _UpdatedState) ->
     PreviousState;
+filter_state_for_event(thread_delete, PreviousState, _UpdatedState) ->
+    PreviousState;
 filter_state_for_event(_Event, _PreviousState, UpdatedState) ->
     UpdatedState.
 

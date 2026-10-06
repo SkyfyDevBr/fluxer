@@ -8,6 +8,7 @@ import {GuildJoinMessage} from '@app/features/channel/components/GuildJoinMessag
 import {PinSystemMessage} from '@app/features/channel/components/PinSystemMessage';
 import {RecipientAddMessage} from '@app/features/channel/components/RecipientAddMessage';
 import {RecipientRemoveMessage} from '@app/features/channel/components/RecipientRemoveMessage';
+import {ThreadCreatedMessage} from '@app/features/channel/components/ThreadCreatedMessage';
 import {UnknownMessage} from '@app/features/channel/components/UnknownMessage';
 import {UserMessage} from '@app/features/channel/components/UserMessage';
 import type {Channel} from '@app/features/channel/models/Channel';
@@ -84,8 +85,16 @@ export function getMessageComponent(
 			);
 		case MessageTypes.DEFAULT:
 		case MessageTypes.REPLY:
+		case MessageTypes.THREAD_STARTER_MESSAGE:
 		case MessageTypes.CLIENT_SYSTEM:
 			return <UserMessage data-flx="messaging.message-component-utils.get-message-component.user-message" />;
+		case MessageTypes.THREAD_CREATED:
+			return (
+				<ThreadCreatedMessage
+					message={message}
+					data-flx="messaging.message-component-utils.get-message-component.thread-created-message"
+				/>
+			);
 		default:
 			return <UnknownMessage data-flx="messaging.message-component-utils.get-message-component.unknown-message--2" />;
 	}

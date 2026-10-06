@@ -105,6 +105,10 @@ is_channel_scoped_event(message_reaction_remove_all) -> true;
 is_channel_scoped_event(message_reaction_remove_emoji) -> true;
 is_channel_scoped_event(typing_start) -> true;
 is_channel_scoped_event(channel_pins_update) -> true;
+is_channel_scoped_event(thread_create) -> true;
+is_channel_scoped_event(thread_update) -> true;
+is_channel_scoped_event(thread_delete) -> true;
+is_channel_scoped_event(thread_members_update) -> true;
 is_channel_scoped_event(webhooks_update) -> true;
 is_channel_scoped_event(_) -> false.
 
@@ -200,7 +204,13 @@ is_bulk_update_event(_) -> false.
 
 -spec extract_channel_id(event(), event_data()) -> channel_id().
 extract_channel_id(Event, FinalData) when
-    Event =:= channel_create; Event =:= channel_update; Event =:= channel_delete
+    Event =:= channel_create;
+    Event =:= channel_update;
+    Event =:= channel_delete;
+    Event =:= thread_create;
+    Event =:= thread_update;
+    Event =:= thread_delete;
+    Event =:= thread_members_update
 ->
     ChannelIdBin = maps:get(<<"id">>, FinalData, undefined),
     guild_dispatch_decorate:require_snowflake(<<"id">>, ChannelIdBin);

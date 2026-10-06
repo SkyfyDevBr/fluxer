@@ -50,6 +50,7 @@ import {ChannelHasFollowedChannelsError} from '@fluxer/errors/src/domains/channe
 import {ChannelTypeConversionNotSupportedError} from '@fluxer/errors/src/domains/channel/ChannelTypeConversionNotSupportedError';
 import {InvalidChannelTypeError} from '@fluxer/errors/src/domains/channel/InvalidChannelTypeError';
 import {MaxCategoryChannelsError} from '@fluxer/errors/src/domains/channel/MaxCategoryChannelsError';
+import {ThreadLockedError} from '@fluxer/errors/src/domains/channel/ThreadLockedError';
 import {UnknownChannelError} from '@fluxer/errors/src/domains/channel/UnknownChannelError';
 import {CannotExecuteOnDmError} from '@fluxer/errors/src/domains/core/CannotExecuteOnDmError';
 import {InputValidationError} from '@fluxer/errors/src/domains/core/InputValidationError';
@@ -82,6 +83,15 @@ export interface ChannelUpdateData {
 	icon?: string | null;
 	owner_id?: bigint | null;
 	nicks?: Record<string, string | null> | null;
+}
+
+export interface ThreadChannelUpdateData {
+	name?: string | null;
+	archived?: boolean;
+	auto_archive_duration?: number;
+	locked?: boolean;
+	invitable?: boolean;
+	rate_limit_per_user?: number | null;
 }
 
 export class ChannelOperationsService {
@@ -396,6 +406,110 @@ export class ChannelOperationsService {
 		return updatedChannel;
 	}
 
+	async editThreadChannel({
+		userId,
+		channelId,
+		data,
+		requestCache,
+		auditLogReason,
+	}: {
+		userId: UserID;
+		channelId: ChannelID;
+		data: ThreadChannelUpdateData;
+		requestCache: RequestCache;
+		auditLogReason: string | null;
+	}): Promise<Channel> {
+		const {channel, guild, hasPermission} = await this.channelAuthService.getChannelAuthenticated({
+			userId,
+			channelId,
+			skipNsfwValidation: true,
+		});
+		if (!channel.isThread() || !guild) {
+			throw new InvalidChannelTypeError();
+		}
+		const metadata = channel.threadMetadata;
+		if (!metadata) {
+			throw new InvalidChannelTypeError();
+		}
+		const isOwner = channel.ownerId === userId;
+		const canManageThreads = await hasPermission(Permissions.MANAGE_THREADS);
+		if (!isOwner && !canManageThreads) {
+			throw new MissingPermissionsError();
+		}
+		if ((data.locked !== undefined || data.invitable !== undefined) && !canManageThreads) {
+			throw new MissingPermissionsError();
+		}
+		if (data.archived === false && metadata.locked && !canManageThreads) {
+			throw new ThreadLockedError();
+		}
+		const nextAutoArchive = data.auto_archive_duration ?? metadata.autoArchiveDuration;
+		let archived = metadata.archived;
+		let archiveTimestamp = metadata.archiveTimestamp;
+		if (data.archived !== undefined && data.archived !== metadata.archived) {
+			archived = data.archived;
+			archiveTimestamp = data.archived ? new Date() : new Date(Date.now() + nextAutoArchive * 60_000);
+		} else if (data.auto_archive_duration !== undefined && !metadata.archived) {
+			archiveTimestamp = new Date(Date.now() + nextAutoArchive * 60_000);
+		}
+		const updatedChannel = await this.channelRepository.channelData.upsert({
+			...channel.toRow(),
+			name: data.name !== undefined && data.name !== null ? data.name : channel.name,
+			rate_limit_per_user: data.rate_limit_per_user !== undefined ? data.rate_limit_per_user : channel.rateLimitPerUser,
+			thread_archived: archived,
+			thread_archive_timestamp: archiveTimestamp,
+			thread_auto_archive_duration: nextAutoArchive,
+			thread_locked: data.locked ?? metadata.locked,
+			thread_invitable: data.invitable ?? metadata.invitable,
+		});
+		await this.channelUtilsService.dispatchThreadUpdate({channel: updatedChannel, requestCache});
+		const beforeSnapshot = serializeChannelForAudit(channel);
+		const afterSnapshot = serializeChannelForAudit(updatedChannel);
+		const changes = this.guildAuditLogService.computeChanges(beforeSnapshot, afterSnapshot);
+		if (changes.length > 0) {
+			const guildIdValue = createGuildID(BigInt(guild.id));
+			const builder = this.guildAuditLogService
+				.createBuilder(guildIdValue, userId)
+				.withAction(AuditLogActionType.CHANNEL_UPDATE, channel.id.toString())
+				.withReason(auditLogReason)
+				.withMetadata({
+					type: updatedChannel.type.toString(),
+				})
+				.withChanges(changes);
+			try {
+				await builder.commit();
+			} catch (error) {
+				Logger.error(
+					{
+						error,
+						guildId: guildIdValue.toString(),
+						userId: userId.toString(),
+						action: AuditLogActionType.CHANNEL_UPDATE,
+						targetId: channel.id.toString(),
+					},
+					'Failed to record guild audit log',
+				);
+			}
+		}
+		return updatedChannel;
+	}
+
+	private async purgeThread({
+		channel,
+		guildId,
+		requestCache,
+	}: {
+		channel: Channel;
+		guildId: GuildID;
+		requestCache: RequestCache;
+	}): Promise<void> {
+		await this.channelUtilsService.purgeChannelAttachments(channel);
+		await this.channelRepository.messages.deleteAllChannelMessages(channel.id);
+		await deleteChannelMessageSearchDocuments(channel.id, {context: {source: 'thread_delete'}});
+		await this.channelRepository.channelData.deleteThreadMembers(channel.id);
+		await this.channelUtilsService.dispatchThreadDelete({channel, requestCache});
+		await this.channelRepository.channelData.delete(channel.id, guildId);
+	}
+
 	async deleteChannel({
 		userId,
 		channelId,
@@ -407,7 +521,7 @@ export class ChannelOperationsService {
 		requestCache: RequestCache;
 		auditLogReason: string | null;
 	}): Promise<void> {
-		const {channel, guild, checkPermission} = await this.channelAuthService.getChannelAuthenticated({
+		const {channel, guild, checkPermission, hasPermission} = await this.channelAuthService.getChannelAuthenticated({
 			userId,
 			channelId,
 			skipNsfwValidation: true,
@@ -415,9 +529,31 @@ export class ChannelOperationsService {
 		if (this.channelAuthService.isPersonalNotesChannel({userId, channelId})) {
 			throw new CannotExecuteOnDmError();
 		}
+		if (channel.isThread()) {
+			if (!guild) {
+				throw new CannotExecuteOnDmError();
+			}
+			const canManageThreads = await hasPermission(Permissions.MANAGE_THREADS);
+			const isOwner = channel.ownerId === userId;
+			if (!isOwner && !canManageThreads) {
+				throw new MissingPermissionsError();
+			}
+			await this.purgeThread({
+				channel,
+				guildId: createGuildID(BigInt(guild.id)),
+				requestCache,
+			});
+			return;
+		}
 		if (guild) {
 			await checkPermission(Permissions.MANAGE_CHANNELS);
 			const guildId = createGuildID(BigInt(guild.id));
+			const childThreads = (await this.channelRepository.channelData.listGuildThreads(guildId)).filter(
+				(thread: Channel) => thread.parentId === channelId,
+			);
+			for (const thread of childThreads) {
+				await this.purgeThread({channel: thread, guildId, requestCache});
+			}
 			if (channel.type === ChannelTypes.GUILD_CATEGORY) {
 				const guildChannels = await this.channelRepository.channelData.listGuildChannels(guildId);
 				const childChannels = guildChannels.filter((ch: Channel) => ch.parentId === channelId);

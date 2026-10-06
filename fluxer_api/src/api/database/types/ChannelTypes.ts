@@ -43,9 +43,26 @@ export interface ChannelRow {
 	last_pin_timestamp: Nullish<Date>;
 	permission_overwrites: Nullish<Map<RoleID | UserID, PermissionOverwrite>>;
 	nicks: Nullish<Map<string, string>>;
+	thread_archived: Nullish<boolean>;
+	thread_auto_archive_duration: Nullish<number>;
+	thread_archive_timestamp: Nullish<Date>;
+	thread_locked: Nullish<boolean>;
+	thread_invitable: Nullish<boolean>;
+	thread_create_timestamp: Nullish<Date>;
+	thread_member_ids: Nullish<Set<UserID>>;
+	member_count: Nullish<number>;
+	message_count: Nullish<number>;
+	total_message_sent: Nullish<number>;
 	soft_deleted: boolean;
 	indexed_at: Nullish<Date>;
 	version: number;
+}
+
+export interface ThreadMemberRow {
+	channel_id: ChannelID;
+	user_id: UserID;
+	join_timestamp: Date;
+	flags: number;
 }
 
 export interface InviteRow {
@@ -134,6 +151,31 @@ export interface ReadStateRow {
 	last_pin_timestamp: Nullish<Date>;
 }
 
+export const CHANNEL_THREAD_COLUMN_DEFAULTS = {
+	thread_archived: null,
+	thread_auto_archive_duration: null,
+	thread_archive_timestamp: null,
+	thread_locked: null,
+	thread_invitable: null,
+	thread_create_timestamp: null,
+	thread_member_ids: null,
+	member_count: null,
+	message_count: null,
+	total_message_sent: null,
+} as const satisfies Pick<
+	ChannelRow,
+	| 'thread_archived'
+	| 'thread_auto_archive_duration'
+	| 'thread_archive_timestamp'
+	| 'thread_locked'
+	| 'thread_invitable'
+	| 'thread_create_timestamp'
+	| 'thread_member_ids'
+	| 'member_count'
+	| 'message_count'
+	| 'total_message_sent'
+>;
+
 export const CHANNEL_COLUMNS = [
 	'channel_id',
 	'guild_id',
@@ -158,10 +200,27 @@ export const CHANNEL_COLUMNS = [
 	'last_pin_timestamp',
 	'permission_overwrites',
 	'nicks',
+	'thread_archived',
+	'thread_auto_archive_duration',
+	'thread_archive_timestamp',
+	'thread_locked',
+	'thread_invitable',
+	'thread_create_timestamp',
+	'thread_member_ids',
+	'member_count',
+	'message_count',
+	'total_message_sent',
 	'soft_deleted',
 	'indexed_at',
 	'version',
 ] as const satisfies ReadonlyArray<keyof ChannelRow>;
+
+export const THREAD_MEMBER_COLUMNS = [
+	'channel_id',
+	'user_id',
+	'join_timestamp',
+	'flags',
+] as const satisfies ReadonlyArray<keyof ThreadMemberRow>;
 
 export interface ChannelsByGuildRow {
 	guild_id: GuildID;

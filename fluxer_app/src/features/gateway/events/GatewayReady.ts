@@ -105,6 +105,9 @@ function handleReadyInternal(data: ReadyPayload, context: GatewayHandlerContext)
 		for (const channel of guild.channels) {
 			channels.push({...channel, guild_id: guild.id});
 		}
+		for (const thread of guild.threads ?? []) {
+			channels.push({...thread, guild_id: guild.id});
+		}
 	}
 	GuildAvailability.loadUnavailableGuilds(guilds);
 	if (data.notes) {

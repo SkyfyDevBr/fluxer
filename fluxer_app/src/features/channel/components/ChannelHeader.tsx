@@ -14,6 +14,7 @@ import {
 	useSkeletonLayoutReport,
 } from '@app/features/app/hooks/useSkeletonLayoutMemoryCapture';
 import {useTextOverflow} from '@app/features/app/hooks/useTextOverflow';
+import {openThreadsBrowser} from '@app/features/channel/commands/ThreadMenuCommands';
 import {ChannelDetailsBottomSheet} from '@app/features/channel/components/bottomsheets/ChannelDetailsBottomSheet';
 import {ChannelSearchBottomSheet} from '@app/features/channel/components/bottomsheets/ChannelSearchBottomSheet';
 import styles from '@app/features/channel/components/ChannelHeader.module.css';
@@ -35,6 +36,7 @@ import {
 	SEARCH_DESCRIPTOR,
 	SHOW_CHANNEL_LIST_DESCRIPTOR,
 	SHOW_MEMBERS_DESCRIPTOR,
+	THREADS_DESCRIPTOR,
 	VIDEO_CALL_DESCRIPTOR,
 } from '@app/features/channel/components/channel_header/shared';
 import {useChannelHeaderData} from '@app/features/channel/components/channel_header/useChannelHeaderData';
@@ -114,6 +116,7 @@ import {useLingui} from '@lingui/react/macro';
 import {
 	ArrowLeftIcon,
 	CaretRightIcon,
+	ChatsCircleIcon,
 	EyeSlashIcon,
 	ListIcon,
 	MagnifyingGlassIcon,
@@ -1010,6 +1013,17 @@ export const ChannelHeader = observer(
 							{showPins && channel && !isMobile && (
 								<ChannelPinsButton channel={channel} data-flx="channel.channel-header.channel-pins-button" />
 							)}
+							{channel &&
+								!isMobile &&
+								!channel.isThread() &&
+								(channel.isGuildText() || channel.isGuildAnnouncement()) && (
+									<ChannelHeaderIcon
+										icon={ChatsCircleIcon}
+										label={i18n._(THREADS_DESCRIPTOR)}
+										onClick={() => openThreadsBrowser(channel)}
+										data-flx="channel.channel-header.channel-header-icon.threads"
+									/>
+								)}
 							{shouldShowCreateGroupButton && (
 								<ChannelHeaderIcon
 									icon={UserPlusIcon}

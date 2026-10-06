@@ -656,6 +656,10 @@ IP authorization resend limit exceeded
 
 This IP address cannot be added to the blocklist
 
+### `MAX_ACTIVE_THREADS`
+
+You have reached the maximum number of active threads in this community
+
 ### `MAX_APPLICATIONS`
 
 You've reached the maximum of {limit, plural, one {# application} other {# applications}}
@@ -1151,6 +1155,10 @@ Unknown sticker
 ### `UNKNOWN_STORE_PURCHASE`
 
 Unknown store purchase
+
+### `UNKNOWN_THREAD_MEMBER`
+
+That thread member wasn't found
 
 ### `UNKNOWN_USER`
 
@@ -1996,6 +2004,10 @@ Tags are only available when people sign in with email
 ### `THIS_VANITY_URL_IS_ALREADY_TAKEN`
 
 This vanity URL is already taken
+
+### `THREAD_IS_LOCKED`
+
+This thread is locked
 
 ### `TICKET_ALREADY_COMPLETED`
 

@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
 import {type ChannelID, createChannelID, createUserID, type UserID} from '@app/api/BrandedTypes';
-import type {ChannelRow} from '@app/api/database/types/ChannelTypes';
+import {CHANNEL_THREAD_COLUMN_DEFAULTS, type ChannelRow} from '@app/api/database/types/ChannelTypes';
 import type {RelationshipRow} from '@app/api/database/types/UserTypes';
 import {UserCacheService} from '@app/api/infrastructure/UserCacheService';
 import type {IUsersServiceClient} from '@app/api/infrastructure/UsersServiceClient';
@@ -67,6 +67,7 @@ function createRelationship(sourceUserId: UserID, targetUserId: UserID, shareVoi
 
 function createPrivateChannel(channelId: ChannelID, type: number, recipientIds: Set<UserID>): Channel {
 	return new Channel({
+		...CHANNEL_THREAD_COLUMN_DEFAULTS,
 		channel_id: channelId,
 		guild_id: null,
 		type,

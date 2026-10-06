@@ -141,6 +141,8 @@ import {
 	type InviteRow,
 	PRIVATE_CHANNEL_COLUMNS,
 	type PrivateChannelRow,
+	THREAD_MEMBER_COLUMNS,
+	type ThreadMemberRow,
 	WEBHOOK_COLUMNS,
 	WEBHOOKS_BY_SOURCE_CHANNEL_COLUMNS,
 	type WebhookRow,
@@ -546,6 +548,12 @@ export const ChannelsByGuild = defineTable<ChannelsByGuildRow, 'guild_id' | 'cha
 	name: 'channels_by_guild_id',
 	columns: CHANNELS_BY_GUILD_COLUMNS,
 	primaryKey: ['guild_id', 'channel_id'],
+});
+export const ThreadMembers = defineTable<ThreadMemberRow, 'channel_id' | 'user_id', 'channel_id'>({
+	name: 'thread_members',
+	columns: THREAD_MEMBER_COLUMNS,
+	primaryKey: ['channel_id', 'user_id'],
+	partitionKey: ['channel_id'],
 });
 export const ChannelState = defineTable<ChannelStateRow, 'channel_id'>({
 	name: 'channel_state',

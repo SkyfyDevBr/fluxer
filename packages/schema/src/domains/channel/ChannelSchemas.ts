@@ -2,8 +2,13 @@
 
 import {CONTENT_WARNING_TEXT_MAX_LENGTH} from '@fluxer/constants/src/GuildConstants';
 import {MAX_GROUP_DM_OTHER_RECIPIENTS, MAX_GROUP_DM_RECIPIENTS} from '@fluxer/constants/src/LimitConstants';
+import {GuildMemberResponse} from '@fluxer/schema/src/domains/guild/GuildMemberSchemas';
 import {type UserPartial, UserPartialResponse} from '@fluxer/schema/src/domains/user/UserResponseSchemas';
-import {ChannelOverwriteTypeSchema, ChannelTypeSchema} from '@fluxer/schema/src/primitives/ChannelValidators';
+import {
+	ChannelOverwriteTypeSchema,
+	ChannelTypeSchema,
+	ThreadAutoArchiveDurationSchema,
+} from '@fluxer/schema/src/primitives/ChannelValidators';
 import {ContentWarningLevelSchema} from '@fluxer/schema/src/primitives/GuildValidators';
 import {PermissionStringType} from '@fluxer/schema/src/primitives/PermissionValidators';
 import {createStringType, Int32Type, SnowflakeStringType} from '@fluxer/schema/src/primitives/SchemaPrimitives';
@@ -40,6 +45,37 @@ export const ChannelSlowmodeStateResponse = z.object({
 
 export type ChannelSlowmodeStateResponse = z.infer<typeof ChannelSlowmodeStateResponse>;
 
+export const ThreadMetadataResponse = z.object({
+	archived: z.boolean().describe('Whether the thread is archived'),
+	auto_archive_duration: ThreadAutoArchiveDurationSchema.describe(
+		'The duration in minutes before the thread is automatically archived after the last activity',
+	),
+	archive_timestamp: z.iso.datetime().describe('ISO8601 timestamp of when the thread archive status was last changed'),
+	locked: z.boolean().describe('Whether the thread is locked; locked threads cannot be unarchived or messaged'),
+	invitable: z.boolean().nullish().describe('Whether non-moderators can add other non-moderators to a private thread'),
+	create_timestamp: z.iso
+		.datetime()
+		.nullish()
+		.describe('ISO8601 timestamp of when the thread was created; only populated for threads created from a message'),
+});
+
+export type ThreadMetadataResponse = z.infer<typeof ThreadMetadataResponse>;
+
+export const ThreadMemberResponse = z.object({
+	id: SnowflakeStringType.describe('The ID of the thread this member belongs to'),
+	user_id: SnowflakeStringType.describe('The ID of the user'),
+	join_timestamp: z.iso.datetime().describe('ISO8601 timestamp of when the member joined the thread'),
+	flags: Int32Type.describe('User-thread settings; currently only used for notifications'),
+	member: z
+		.lazy(() => GuildMemberResponse)
+		.optional()
+		.describe('The guild member for this thread member; only included when the requester is a bot'),
+});
+
+export type ThreadMemberResponse = z.infer<typeof ThreadMemberResponse>;
+
+export const ThreadMemberListResponse = z.array(ThreadMemberResponse);
+
 export const CallEligibilityResponse = z.object({
 	ringable: z.boolean().describe('Whether the current user can ring this call'),
 	silent: z.boolean().describe('Whether the call should be joined silently'),
@@ -54,7 +90,7 @@ export const ChannelResponse = z.object({
 	topic: z.string().nullish().describe('The topic of the channel'),
 	url: z.url().nullish().describe('The URL associated with the channel'),
 	icon: z.string().nullish().describe('The icon hash of the channel (for group DMs)'),
-	owner_id: SnowflakeStringType.nullish().describe('The ID of the owner of the channel (for group DMs)'),
+	owner_id: SnowflakeStringType.nullish().describe('The ID of the owner of the channel (for group DMs and threads)'),
 	type: ChannelTypeSchema.describe('The type of the channel'),
 	position: Int32Type.optional().describe('The sorting position of the channel'),
 	parent_id: SnowflakeStringType.nullish().describe('The ID of the parent category for this channel'),
@@ -101,9 +137,32 @@ export const ChannelResponse = z.object({
 		.record(z.string(), createStringType(1, 32))
 		.optional()
 		.describe('Custom nicknames for users in this channel (for group DMs)'),
+	thread_metadata: z
+		.lazy(() => ThreadMetadataResponse)
+		.nullish()
+		.describe('Thread-specific metadata; only present for thread channels'),
+	member_count: Int32Type.nullish().describe('Approximate number of members in this thread'),
+	message_count: Int32Type.nullish().describe(
+		'Approximate number of messages in this thread; stops counting at 50 and excludes deleted messages and the starter message',
+	),
+	total_message_sent: Int32Type.nullish().describe(
+		'Total number of messages ever sent in this thread; unlike message_count it does not decrease when messages are deleted',
+	),
+	thread_member: z
+		.lazy(() => ThreadMemberResponse)
+		.nullish()
+		.describe("The current user's thread member object, when requested"),
 });
 
 export type ChannelResponse = z.infer<typeof ChannelResponse>;
+
+export const ThreadListResponse = z.object({
+	threads: z.array(ChannelResponse).describe('The threads in the response'),
+	members: z.array(ThreadMemberResponse).describe('The thread member objects for the threads in the response'),
+	has_more: z.boolean().optional().describe('Whether there are more threads beyond this page'),
+});
+
+export type ThreadListResponse = z.infer<typeof ThreadListResponse>;
 
 export const ChannelNicknameOverrides = z
 	.record(
@@ -163,6 +222,11 @@ export interface Channel {
 	readonly content_warning_text?: string | null;
 	readonly rate_limit_per_user?: number;
 	readonly nicks?: Readonly<Record<string, string>>;
+	readonly thread_metadata?: ThreadMetadataResponse | null;
+	readonly member_count?: number | null;
+	readonly message_count?: number | null;
+	readonly total_message_sent?: number | null;
+	readonly thread_member?: ThreadMemberResponse | null;
 }
 
 export const ChannelListResponse = z.array(ChannelResponse);

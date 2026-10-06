@@ -14,7 +14,12 @@ import {
 	upsertOne,
 } from '@app/api/database/CassandraQueryExecution';
 import {Db} from '@app/api/database/CassandraTypes';
-import type {ChannelRow, DmStateRow, PrivateChannelRow} from '@app/api/database/types/ChannelTypes';
+import {
+	CHANNEL_THREAD_COLUMN_DEFAULTS,
+	type ChannelRow,
+	type DmStateRow,
+	type PrivateChannelRow,
+} from '@app/api/database/types/ChannelTypes';
 import {Logger} from '@app/api/Logger';
 import {Channel} from '@app/api/models/Channel';
 import {Channels, DmStates, PinnedDms, PrivateChannels, ReadStates, UserDmHistory} from '@app/api/Tables';
@@ -137,6 +142,7 @@ function buildDmChannelRow({
 	ownerId: UserID | null;
 }): ChannelRow {
 	return {
+		...CHANNEL_THREAD_COLUMN_DEFAULTS,
 		channel_id: channelId,
 		guild_id: null,
 		type: ChannelTypes.DM,

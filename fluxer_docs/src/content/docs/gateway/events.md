@@ -75,6 +75,10 @@ A Dispatch is buffered for [Resume](/gateway/commands/#resume) replay unless it 
 | [Channel Update](#channel-update) | A visible channel changes | Channel visibility |
 | [Channel Update Bulk](#channel-update-bulk) | One operation changes several channels together | Channel visibility |
 | [Channel Delete](#channel-delete) | A channel leaves the session's visibility | Channel visibility |
+| [Thread Create](#thread-create) | A thread becomes visible to the session | Thread visibility |
+| [Thread Update](#thread-update) | A visible thread changes | Thread visibility |
+| [Thread Delete](#thread-delete) | A thread leaves the session's visibility | Thread visibility |
+| [Thread Members Update](#thread-members-update) | A thread's member set changes | Thread visibility |
 | [Channel Recipient Add](#channel-recipient-add) | A user joins a group direct message the session belongs to | Private channel |
 | [Channel Recipient Remove](#channel-recipient-remove) | A user leaves a group direct message the session belongs to | Private channel |
 | [Webhooks Update](#webhooks-update) | The webhook set of a viewable guild channel changes | Channel visibility |
@@ -495,6 +499,34 @@ Each recipient sees only channels they can view. An empty result produces no Dis
 A channel left the session's visibility, whether deleted or newly hidden. The payload is the complete [channel object](/http-api/channels/#channel-object) as it was before the change.
 
 Recipients are the sessions that could see the channel before it was deleted.
+
+### <span id="thread-create"></span>THREAD_CREATE
+
+A thread became visible to the session, whether newly created or newly permitted. The payload is the complete [channel object](/http-api/channels/#channel-object) with `thread_metadata` and the thread counters populated. Private threads are only delivered to their members and to members holding `MANAGE_THREADS`.
+
+### <span id="thread-update"></span>THREAD_UPDATE
+
+A visible thread changed, including archive, lock, name, and slowmode updates. The payload is the complete [channel object](/http-api/channels/#channel-object); sending a message in an archived thread emits this event when the thread is unarchived.
+
+### <span id="thread-delete"></span>THREAD_DELETE
+
+A thread left the session's visibility, whether deleted or newly hidden. The payload is the complete [channel object](/http-api/channels/#channel-object) as it was before the change.
+
+Recipients are the sessions that could see the thread before it was deleted.
+
+### <span id="thread-members-update"></span>THREAD_MEMBERS_UPDATE
+
+A thread's member set changed.
+
+| Field | Type | Description |
+| --- | --- | --- |
+| id | snowflake | Thread channel ID |
+| guild_id | snowflake | Guild the thread belongs to |
+| member_count | integer | Approximate member count after the change |
+| added_members | array[[thread member](/http-api/channels/#thread-member-object) object] | Members added by this change |
+| removed_member_ids | array[snowflake] | User IDs removed by this change |
+
+A public thread also emits this when a user is auto-joined by sending a message.
 
 ### <span id="channel-recipient-add"></span>CHANNEL_RECIPIENT_ADD
 

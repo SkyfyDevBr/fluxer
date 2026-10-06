@@ -1,0 +1,96 @@
+.banner {
+	align-items: center;
+	background: var(--background-secondary);
+	border-bottom: 1px solid var(--border-subtle);
+	display: flex;
+	gap: 0.5rem;
+	padding: 0.5rem 0.75rem;
+	position: sticky;
+	top: 0;
+	z-index: 2;
+}
+
+.chatAreaWithBanner {
+	display: flex;
+	flex-direction: column;
+	height: 100%;
+	min-height: 0;
+	min-width: 0;
+}
+
+.chatAreaWithBanner > :last-child {
+	flex: 1 1 auto;
+	min-height: 0;
+}
+
+.backButton {
+	align-items: center;
+	background: transparent;
+	border: none;
+	border-radius: 0.25rem;
+	color: var(--text-muted);
+	cursor: pointer;
+	display: flex;
+	height: 1.75rem;
+	justify-content: center;
+	width: 1.75rem;
+}
+
+.backButton:hover {
+	background: var(--background-modifier-hover);
+	color: var(--text-primary);
+}
+
+.icon {
+	color: var(--text-muted);
+	flex-shrink: 0;
+}
+
+.main {
+	display: flex;
+	flex-direction: column;
+	min-width: 0;
+}
+
+.name {
+	color: var(--text-primary);
+	font-weight: 600;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.meta {
+	color: var(--text-muted);
+	font-size: 0.75rem;
+}
+
+.chip {
+	background: var(--background-tertiary);
+	border-radius: 0.25rem;
+	color: var(--text-muted);
+	font-size: 0.6875rem;
+	font-weight: 700;
+	letter-spacing: 0.02em;
+	margin-left: auto;
+	padding: 0.125rem 0.375rem;
+	text-transform: uppercase;
+}
+
+.menuButton {
+	align-items: center;
+	background: transparent;
+	border: none;
+	border-radius: 0.25rem;
+	color: var(--text-muted);
+	cursor: pointer;
+	display: flex;
+	height: 1.75rem;
+	justify-content: center;
+	width: 1.75rem;
+}
+
+.menuButton:hover {
+	background: var(--background-modifier-hover);
+	color: var(--text-primary);
+}

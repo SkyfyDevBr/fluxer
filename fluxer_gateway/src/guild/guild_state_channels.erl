@@ -8,6 +8,10 @@
     handle_channel_update/2,
     handle_channel_update_bulk/2,
     handle_channel_delete/2,
+    handle_thread_create/2,
+    handle_thread_update/2,
+    handle_thread_delete/2,
+    handle_thread_members_update/2,
     handle_message_create/2,
     handle_channel_pins_update/2,
     handle_emojis_update/2,
@@ -53,6 +57,64 @@ handle_channel_delete(EventData, Data) ->
     ChannelId = maps:get(<<"id">>, EventData),
     FilteredChannels = guild_state_utils:remove_item_by_id(Channels, ChannelId),
     guild_data_index:put_channels(FilteredChannels, Data).
+
+-spec handle_thread_create(event_data(), guild_data()) -> guild_data().
+handle_thread_create(EventData, Data) ->
+    handle_channel_create(EventData, Data).
+
+-spec handle_thread_update(event_data(), guild_data()) -> guild_data().
+handle_thread_update(EventData, Data) ->
+    Channels = guild_data_index:channel_list(Data),
+    ChannelId = maps:get(<<"id">>, EventData),
+    Existing = guild_state_utils:find_item_by_id(Channels, ChannelId),
+    EventWithMembers = preserve_thread_member_ids(EventData, Existing),
+    UpdatedChannels = guild_state_utils:replace_item_by_id(Channels, ChannelId, EventWithMembers),
+    guild_data_index:put_channels(UpdatedChannels, Data).
+
+-spec preserve_thread_member_ids(event_data(), map() | undefined) -> event_data().
+preserve_thread_member_ids(EventData, Existing) when is_map(Existing) ->
+    case maps:is_key(<<"thread_member_ids">>, EventData) of
+        true -> EventData;
+        false -> maps:merge(maps:with([<<"thread_member_ids">>], Existing), EventData)
+    end;
+preserve_thread_member_ids(EventData, _Existing) ->
+    EventData.
+
+-spec handle_thread_delete(event_data(), guild_data()) -> guild_data().
+handle_thread_delete(EventData, Data) ->
+    handle_channel_delete(EventData, Data).
+
+-spec handle_thread_members_update(event_data(), guild_data()) -> guild_data().
+handle_thread_members_update(EventData, Data) ->
+    ChannelId = snowflake_id:parse_optional(maps:get(<<"id">>, EventData, undefined)),
+    Index = guild_data_index:channel_index(Data),
+    case ChannelId =/= undefined andalso maps:find(ChannelId, Index) of
+        {ok, Channel} ->
+            AddedIds = thread_member_added_ids(EventData),
+            RemovedIds = thread_member_removed_ids(EventData),
+            Current = maps:get(<<"thread_member_ids">>, Channel, []),
+            NewIds = lists:usort((Current -- RemovedIds) ++ AddedIds),
+            Updated = Channel#{<<"thread_member_ids">> => NewIds},
+            Data#{<<"channel_index">> => Index#{ChannelId => Updated}, channels_stale => true};
+        _ ->
+            Data
+    end.
+
+-spec thread_member_added_ids(event_data()) -> [binary()].
+thread_member_added_ids(EventData) ->
+    Added = maps:get(<<"added_members">>, EventData, []),
+    [
+        UserId
+     || Member <- map_utils:ensure_list(Added),
+        is_map(Member),
+        UserId <- [maps:get(<<"user_id">>, Member, undefined)],
+        is_binary(UserId)
+    ].
+
+-spec thread_member_removed_ids(event_data()) -> [binary()].
+thread_member_removed_ids(EventData) ->
+    Removed = maps:get(<<"removed_member_ids">>, EventData, []),
+    [UserId || UserId <- map_utils:ensure_list(Removed), is_binary(UserId)].
 
 -spec handle_message_create(event_data(), guild_data()) -> guild_data().
 handle_message_create(EventData, Data) ->

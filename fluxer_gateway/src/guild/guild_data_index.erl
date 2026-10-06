@@ -52,7 +52,9 @@ normalize_map(Data) ->
         guild_data_index_members:member_map(Data0)
     ),
     Roles = guild_data_index_roles:role_list(Data0),
-    Channels = guild_data_index_channels:channel_list(Data0),
+    Channels =
+        guild_data_index_channels:channel_list(Data0) ++
+            map_utils:ensure_list(maps:get(<<"threads">>, Data0, [])),
     Data0#{
         <<"members">> => MemberMap,
         members_normalized => MemberMap,

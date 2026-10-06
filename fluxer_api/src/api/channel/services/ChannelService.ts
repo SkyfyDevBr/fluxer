@@ -12,6 +12,7 @@ import {MessageInteractionService} from '@app/api/channel/services/MessageIntera
 import {MessageService} from '@app/api/channel/services/MessageService';
 import {MessagePersistenceService} from '@app/api/channel/services/message/MessagePersistenceService';
 import {UserMessageDeletionService} from '@app/api/channel/services/message/UserMessageDeletionService';
+import {ThreadService} from '@app/api/channel/services/thread/ThreadService';
 import type {IFavoriteMemeRepository} from '@app/api/favorite_meme/IFavoriteMemeRepository';
 import type {GuildAuditLogService} from '@app/api/guild/GuildAuditLogService';
 import type {IGuildRepositoryAggregate} from '@app/api/guild/repositories/IGuildRepositoryAggregate';
@@ -46,6 +47,7 @@ export class ChannelService {
 	public readonly interactions: MessageInteractionService;
 	public readonly attachments: AttachmentUploadService;
 	public readonly groupDms: GroupDmOperationsService;
+	public readonly threads: ThreadService;
 	public readonly calls: CallService;
 	public readonly userMessageDeletion: UserMessageDeletionService;
 	private readonly rateLimitService: IRateLimitService;
@@ -122,6 +124,16 @@ export class ChannelService {
 			rateLimitService,
 			cacheService,
 		);
+		this.threads = new ThreadService(
+			channelRepository,
+			guildRepository,
+			gatewayService,
+			this.channelData.auth,
+			this.channelData.utils,
+			messagePersistenceService,
+			snowflakeService,
+			userCacheService,
+		);
 		this.messages = new MessageService(
 			channelRepository,
 			userRepository,
@@ -141,6 +153,7 @@ export class ChannelService {
 			messagePersistenceService,
 			attachmentUploadTraceRepository,
 			limitConfigService,
+			this.threads,
 		);
 		this.interactions = new MessageInteractionService(
 			channelRepository,

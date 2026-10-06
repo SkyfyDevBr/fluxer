@@ -52,13 +52,20 @@ const insertSorted = (channels: ReadonlyArray<Channel>, channel: Channel): Array
 class Channels {
 	private readonly channelsById = new Map<string, Channel>();
 	private readonly channelsByGuildId = new Map<string, ReadonlyArray<Channel>>();
+	private readonly threadsByGuildId = new Map<string, ReadonlyArray<Channel>>();
+	private readonly threadsByParentId = new Map<string, ReadonlyArray<Channel>>();
 	private privateChannelList: ReadonlyArray<Channel> = EMPTY_CHANNELS;
 	private readonly optimisticChannelBackups = new Map<string, Channel>();
 
 	constructor() {
-		makeAutoObservable<this, 'channelsByGuildId' | 'privateChannelList'>(
+		makeAutoObservable<this, 'channelsByGuildId' | 'threadsByGuildId' | 'threadsByParentId' | 'privateChannelList'>(
 			this,
-			{channelsByGuildId: observableShallow, privateChannelList: observableRef},
+			{
+				channelsByGuildId: observableShallow,
+				threadsByGuildId: observableShallow,
+				threadsByParentId: observableShallow,
+				privateChannelList: observableRef,
+			},
 			{autoBind: true},
 		);
 	}
@@ -92,6 +99,18 @@ class Channels {
 
 	getGuildChannels(guildId: string): ReadonlyArray<Channel> {
 		return this.channelsByGuildId.get(guildId) ?? EMPTY_CHANNELS;
+	}
+
+	getGuildThreads(guildId: string): ReadonlyArray<Channel> {
+		return this.threadsByGuildId.get(guildId) ?? EMPTY_CHANNELS;
+	}
+
+	getChildThreads(parentChannelId: string): ReadonlyArray<Channel> {
+		return this.threadsByParentId.get(parentChannelId) ?? EMPTY_CHANNELS;
+	}
+
+	getActiveThreads(parentChannelId: string): ReadonlyArray<Channel> {
+		return this.getChildThreads(parentChannelId).filter((thread) => !thread.isArchivedThread());
 	}
 
 	getPrivateChannels(): ReadonlyArray<Channel> {
@@ -161,6 +180,10 @@ class Channels {
 
 	private addChannelToIndex(channel: Channel): void {
 		if (channel.guildId) {
+			if (channel.isThread()) {
+				this.addThreadToIndex(channel);
+				return;
+			}
 			const list = this.channelsByGuildId.get(channel.guildId) ?? EMPTY_CHANNELS;
 			this.channelsByGuildId.set(channel.guildId, insertSorted(list, channel));
 			return;
@@ -170,8 +193,55 @@ class Channels {
 		}
 	}
 
+	private addThreadToIndex(channel: Channel): void {
+		const guildId = channel.guildId!;
+		const guildThreads = this.threadsByGuildId.get(guildId) ?? EMPTY_CHANNELS;
+		this.threadsByGuildId.set(guildId, [channel, ...guildThreads.filter((entry) => entry.id !== channel.id)]);
+		if (channel.parentId) {
+			const parentThreads = this.threadsByParentId.get(channel.parentId) ?? EMPTY_CHANNELS;
+			this.threadsByParentId.set(channel.parentId, [
+				channel,
+				...parentThreads.filter((entry) => entry.id !== channel.id),
+			]);
+		}
+	}
+
+	private removeThreadFromIndex(channel: Channel): void {
+		const guildId = channel.guildId;
+		if (guildId) {
+			const guildThreads = this.threadsByGuildId.get(guildId);
+			if (guildThreads) {
+				const next = guildThreads.filter((entry) => entry.id !== channel.id);
+				if (next.length !== guildThreads.length) {
+					if (next.length === 0) {
+						this.threadsByGuildId.delete(guildId);
+					} else {
+						this.threadsByGuildId.set(guildId, next);
+					}
+				}
+			}
+		}
+		if (channel.parentId) {
+			const parentThreads = this.threadsByParentId.get(channel.parentId);
+			if (parentThreads) {
+				const next = parentThreads.filter((entry) => entry.id !== channel.id);
+				if (next.length !== parentThreads.length) {
+					if (next.length === 0) {
+						this.threadsByParentId.delete(channel.parentId);
+					} else {
+						this.threadsByParentId.set(channel.parentId, next);
+					}
+				}
+			}
+		}
+	}
+
 	private removeChannelFromIndex(channel: Channel): void {
 		if (channel.guildId) {
+			if (channel.isThread()) {
+				this.removeThreadFromIndex(channel);
+				return;
+			}
 			const list = this.channelsByGuildId.get(channel.guildId);
 			if (!list) {
 				return;
@@ -197,6 +267,13 @@ class Channels {
 
 	private replaceChannelInIndex(previous: Channel, next: Channel): void {
 		if (next.guildId) {
+			if (next.isThread()) {
+				if (previous.parentId !== next.parentId) {
+					this.removeThreadFromIndex(previous);
+				}
+				this.addThreadToIndex(next);
+				return;
+			}
 			const list = this.channelsByGuildId.get(next.guildId);
 			const index = list ? list.findIndex((entry) => entry.id === next.id) : -1;
 			if (!list || index === -1) {
@@ -227,6 +304,8 @@ class Channels {
 	handleGatewayReady({channels}: {channels: ReadonlyArray<WireChannel>}): void {
 		this.channelsById.clear();
 		this.channelsByGuildId.clear();
+		this.threadsByGuildId.clear();
+		this.threadsByParentId.clear();
 		this.privateChannelList = EMPTY_CHANNELS;
 		ChannelDisplayName.clear();
 		const allRecipients = channels
@@ -263,26 +342,86 @@ class Channels {
 		if (guild.unavailable) {
 			return;
 		}
-		const syncedChannelIds = new Set(guild.channels.map((channel) => channel.id));
+		const guildThreads = guild.threads ?? EMPTY_CHANNELS;
+		const syncedChannels = [...guild.channels, ...guildThreads];
+		const syncedChannelIds = new Set(syncedChannels.map((channel) => channel.id));
 		const existingGuildChannels = this.getGuildChannels(guild.id);
 		for (const channel of existingGuildChannels) {
 			if (!syncedChannelIds.has(channel.id)) {
 				this.removeChannel(channel.id);
 			}
 		}
-		for (const channel of guild.channels) {
+		const existingGuildThreads = this.getGuildThreads(guild.id);
+		for (const thread of existingGuildThreads) {
+			if (!syncedChannelIds.has(thread.id)) {
+				this.removeChannel(thread.id);
+			}
+		}
+		for (const channel of syncedChannels) {
 			this.setChannel(channel);
 		}
 	}
 
 	handleGuildDelete({guildId}: {guildId: string}): void {
 		const guildChannels = this.getGuildChannels(guildId);
-		if (guildChannels.length === 0) return;
+		const guildThreads = this.getGuildThreads(guildId);
+		if (guildChannels.length === 0 && guildThreads.length === 0) return;
 		const ids: Array<string> = [];
 		for (const channel of guildChannels) ids.push(channel.id);
+		for (const thread of guildThreads) ids.push(thread.id);
 		for (const id of ids) {
 			this.removeChannel(id);
 		}
+	}
+
+	handleThreadCreate({channel}: {channel: WireChannel}): void {
+		this.setChannel(channel);
+	}
+
+	handleThreadUpdate({channel}: {channel: WireChannel}): void {
+		this.setChannel(channel);
+	}
+
+	handleThreadDelete({channel}: {channel: WireChannel}): void {
+		this.handleThreadRemoval(channel);
+	}
+
+	private handleThreadRemoval(channel: WireChannel): void {
+		const threadId = channel.id;
+		this.removeChannel(threadId);
+		const history = RouterUtils.getHistory();
+		const currentPath = history?.location.pathname ?? '';
+		const guildId = channel.guild_id;
+		if (!guildId) {
+			return;
+		}
+		const expectedPath = Routes.guildChannel(guildId, threadId);
+		if (!currentPath.startsWith(expectedPath)) {
+			return;
+		}
+		const parentId = channel.parent_id;
+		if (parentId && this.channelsById.has(parentId)) {
+			NavigationCommands.selectChannel(guildId, parentId);
+		} else {
+			const selectableChannel = filterViewableChannels(this.getGuildChannels(guildId))[0];
+			NavigationCommands.selectChannel(guildId, selectableChannel?.id);
+		}
+	}
+
+	handleThreadMembersUpdate({channelId, memberCount}: {channelId: string; memberCount: number}): void {
+		const thread = this.channelsById.get(channelId);
+		if (!thread?.isThread()) {
+			return;
+		}
+		if (thread.memberCount === memberCount) {
+			return;
+		}
+		this.setChannel(
+			new Channel({
+				...thread.toJSON(),
+				member_count: memberCount,
+			}),
+		);
 	}
 
 	handleChannelCreate({channel}: {channel: WireChannel}): void {

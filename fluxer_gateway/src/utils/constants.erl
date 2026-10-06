@@ -25,6 +25,7 @@
     read_message_history_permission/0,
     kick_members_permission/0,
     ban_members_permission/0,
+    manage_threads_permission/0,
     view_channel_members_permission/0,
     voice_channel_camera_user_limit/0
 ]).
@@ -148,6 +149,9 @@ kick_members_permission() -> 2.
 
 -spec ban_members_permission() -> pos_integer().
 ban_members_permission() -> 4.
+
+-spec manage_threads_permission() -> pos_integer().
+manage_threads_permission() -> 17179869184.
 
 -spec view_channel_members_permission() -> pos_integer().
 view_channel_members_permission() -> 18014398509481984.

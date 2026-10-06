@@ -66,18 +66,43 @@ maybe_apply_channel_overwrites(Permissions, UserId, MemberRoles, ChannelId, Guil
 ->
     Data = guild_permissions_common:resolve_data_map(State),
     OverwriteCache = overwrite_cache_from_data(Data),
-    case maps:get(ChannelId, OverwriteCache, undefined) of
+    EffectiveChannelId = resolve_permission_channel_id(ChannelId, State),
+    case maps:get(EffectiveChannelId, OverwriteCache, undefined) of
         CachedOWs when is_list(CachedOWs) ->
             apply_cached_overwrites(Permissions, UserId, MemberRoles, CachedOWs, GuildId);
         _ ->
             apply_from_channel_lookup(
-                Permissions, UserId, MemberRoles, ChannelId, GuildId, State
+                Permissions, UserId, MemberRoles, EffectiveChannelId, GuildId, State
             )
     end;
 maybe_apply_channel_overwrites(
     Permissions, _UserId, _MemberRoles, _ChannelId, _GuildId, _State
 ) ->
     Permissions.
+
+-spec resolve_permission_channel_id(integer(), guild_state()) -> integer().
+resolve_permission_channel_id(ChannelId, State) ->
+    case guild_permissions_check:find_channel_by_id(ChannelId, State) of
+        Channel when is_map(Channel) ->
+            case is_thread_channel(Channel) of
+                true ->
+                    case snowflake_id:parse_maybe(maps:get(<<"parent_id">>, Channel, undefined)) of
+                        ParentId when is_integer(ParentId) -> ParentId;
+                        _ -> ChannelId
+                    end;
+                false ->
+                    ChannelId
+            end;
+        _ ->
+            ChannelId
+    end.
+
+-spec is_thread_channel(map()) -> boolean().
+is_thread_channel(Channel) ->
+    case guild_data_normalize_schema:int(maps:get(<<"type">>, Channel, undefined)) of
+        Type when Type =:= 10; Type =:= 11; Type =:= 12 -> true;
+        _ -> false
+    end.
 
 -spec apply_from_channel_lookup(
     permission(), user_id(), member_roles(), integer(), role_id(), guild_state()

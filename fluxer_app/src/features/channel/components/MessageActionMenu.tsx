@@ -1,6 +1,10 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
 import {
+	canCreateThreadFromMessage,
+	openCreateThreadFromMessage,
+} from '@app/features/channel/commands/ThreadMenuCommands';
+import {
 	canReportMessage,
 	createMessageActionHandlers,
 	getEffectiveContent,
@@ -41,6 +45,7 @@ import {
 	CopyIdIcon,
 	CopyLinkIcon,
 	CopyMessageTextIcon,
+	CreateThreadIcon,
 	CrosspostIcon,
 	DebugMessageIcon,
 	DeleteIcon,
@@ -120,11 +125,16 @@ interface MessageActionMenuOptions {
 	submenuReactionCount?: number;
 }
 
+const CREATE_THREAD_DESCRIPTOR = msg({
+	message: 'Create thread',
+	comment: 'Message action that creates a new thread from the selected message.',
+});
 export const messageActionMenuItemIds = {
 	addReaction: 'add-reaction',
 	viewReactions: 'view_reactions',
 	removeAllReactions: 'remove_all_reactions',
 	reply: 'reply',
+	createThread: 'create_thread',
 	forward: 'forward',
 	crosspost: 'message_crosspost',
 	edit: 'edit',
@@ -286,6 +296,15 @@ export const useMessageActionMenuData = (
 					shortcut: (
 						<KeybindHint action="message_reply" data-flx="channel.message-action-menu.groups.keybind-hint--3" />
 					),
+				});
+			}
+			if (message.isUserMessage() && supportsInteractiveActions && canCreateThreadFromMessage(message)) {
+				const openThread = () => openCreateThreadFromMessage(message);
+				interactionActions.push({
+					id: messageActionMenuItemIds.createThread,
+					icon: <CreateThreadIcon size={20} data-flx="channel.message-action-menu.groups.create-thread-icon" />,
+					label: i18n._(CREATE_THREAD_DESCRIPTOR),
+					onClick: onClose ? () => ModalCommands.runAfterBottomSheetClose(onClose, openThread) : openThread,
 				});
 			}
 			if (message.isUserMessage() && supportsInteractiveActions && permissions?.canForwardMessage) {

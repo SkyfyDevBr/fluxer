@@ -118,11 +118,21 @@ class Permission {
 		}
 		const currentUser = Users.currentUser;
 		if (!currentUser) return;
-		this.channelPermissions.set(
-			channel.id as ChannelId,
-			PermissionUtils.computePermissions(currentUser, channel.toJSON()),
-		);
+		this.channelPermissions.set(channel.id as ChannelId, this.computeChannelPermissions(currentUser, channel));
 		this.bumpGuildVersion(channel.guildId);
+	}
+
+	private computeChannelPermissions(user: UserModel, channel: ChannelModel): bigint {
+		if (channel.isThread() && channel.parentId) {
+			const parent = Channels.getChannel(channel.parentId);
+			if (parent) {
+				return PermissionUtils.computePermissions(user, {
+					...channel.toJSON(),
+					permission_overwrites: parent.toJSON().permission_overwrites,
+				});
+			}
+		}
+		return PermissionUtils.computePermissions(user, channel.toJSON());
 	}
 
 	handleChannelDelete(channelId: string, guildId?: string): void {
@@ -138,10 +148,7 @@ class Permission {
 		this.guildPermissions.set(guildId as GuildId, PermissionUtils.computePermissions(currentUser, guild.toJSON()));
 		for (const channel of Channels.channels) {
 			if (channel.guildId === guildId) {
-				this.channelPermissions.set(
-					channel.id as ChannelId,
-					PermissionUtils.computePermissions(currentUser, channel.toJSON()),
-				);
+				this.channelPermissions.set(channel.id as ChannelId, this.computeChannelPermissions(currentUser, channel));
 			}
 		}
 		this.bumpGuildVersion(guildId);
@@ -163,6 +170,11 @@ class Permission {
 			this.bumpGuildVersion(guild.id);
 		}
 		for (const channel of Channels.channels) {
+			if (channel.isThread()) {
+				this.channelPermissions.set(channel.id as ChannelId, this.computeChannelPermissions(user, channel));
+				this.bumpGuildVersion(channel.guildId);
+				continue;
+			}
 			if (Object.keys(channel.permissionOverwrites).length === 0) {
 				if (channel.guildId != null) {
 					const guildPerms = this.guildPermissions.get(channel.guildId as GuildId) ?? PermissionUtils.NONE;
@@ -171,10 +183,7 @@ class Permission {
 					this.channelPermissions.set(channel.id as ChannelId, PermissionUtils.NONE);
 				}
 			} else {
-				this.channelPermissions.set(
-					channel.id as ChannelId,
-					PermissionUtils.computePermissions(user, channel.toJSON()),
-				);
+				this.channelPermissions.set(channel.id as ChannelId, this.computeChannelPermissions(user, channel));
 			}
 			this.bumpGuildVersion(channel.guildId);
 		}

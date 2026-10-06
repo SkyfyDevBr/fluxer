@@ -4,7 +4,7 @@ import type {ChannelID, EmojiID, GuildID, RoleID, StickerID, UserID} from '@app/
 import {createChannelID, createRoleID, createUserID} from '@app/api/BrandedTypes';
 import {mapChannelToResponse} from '@app/api/channel/ChannelMappers';
 import type {IChannelRepository} from '@app/api/channel/IChannelRepository';
-import type {PermissionOverwrite} from '@app/api/database/types/ChannelTypes';
+import {CHANNEL_THREAD_COLUMN_DEFAULTS, type PermissionOverwrite} from '@app/api/database/types/ChannelTypes';
 import type {GuildAuditLogService} from '@app/api/guild/GuildAuditLogService';
 import type {GuildAuditLogChange} from '@app/api/guild/GuildAuditLogTypes';
 import type {IGuildRepositoryAggregate} from '@app/api/guild/repositories/IGuildRepositoryAggregate';
@@ -149,6 +149,7 @@ export class ChannelOperationsService {
 			trimmedContentWarningText && trimmedContentWarningText.length > 0 ? trimmedContentWarningText : null;
 		const channelId = createChannelID(await this.snowflakeService.generate());
 		const channel = await this.channelRepository.upsert({
+			...CHANNEL_THREAD_COLUMN_DEFAULTS,
 			channel_id: channelId,
 			guild_id: params.guildId,
 			type: params.data.type,

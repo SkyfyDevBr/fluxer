@@ -13070,7 +13070,7 @@
 			"ChannelType": {
 				"description": "The type of the channel",
 				"type": "integer",
-				"enum": [0, 1, 2, 3, 4, 5, 998, 999],
+				"enum": [0, 1, 2, 3, 4, 5, 10, 11, 12, 998, 999],
 				"format": "int32",
 				"x-enumNames": [
 					"GUILD_TEXT",
@@ -13079,6 +13079,9 @@
 					"GROUP_DM",
 					"GUILD_CATEGORY",
 					"GUILD_ANNOUNCEMENT",
+					"GUILD_ANNOUNCEMENT_THREAD",
+					"GUILD_PUBLIC_THREAD",
+					"GUILD_PRIVATE_THREAD",
 					"GUILD_LINK",
 					"DM_PERSONAL_NOTES"
 				],
@@ -13089,6 +13092,9 @@
 					"A group direct message between users",
 					"A category that contains channels",
 					"A guild channel whose messages can be published to channels that follow it",
+					"A thread within a guild announcement channel",
+					"A public thread within a guild channel",
+					"A private thread within a guild channel",
 					"A link channel for external resources",
 					"Personal notes DM channel"
 				]
@@ -14210,7 +14216,7 @@
 			"MessageType": {
 				"description": "The type of message",
 				"type": "integer",
-				"enum": [0, 1, 2, 3, 4, 5, 6, 7, 12, 19],
+				"enum": [0, 1, 2, 3, 4, 5, 6, 7, 12, 18, 21, 19],
 				"format": "int32",
 				"x-enumNames": [
 					"DEFAULT",
@@ -14222,6 +14228,8 @@
 					"CHANNEL_PINNED_MESSAGE",
 					"USER_JOIN",
 					"CHANNEL_FOLLOW_ADD",
+					"THREAD_CREATED",
+					"THREAD_STARTER_MESSAGE",
 					"REPLY"
 				],
 				"x-enumDescriptions": [
@@ -14234,6 +14242,8 @@
 					"A system message indicating a message was pinned",
 					"A system message indicating a user joined",
 					"System message posted when a channel starts following an announcement channel",
+					"System message posted when a thread is created in a channel",
+					"The first message of a thread created from an existing message",
 					"A reply message"
 				]
 			},
@@ -14709,6 +14719,18 @@
 						"name": "MANAGE_EXPRESSIONS",
 						"value": "1073741824",
 						"description": "Allows management of guild expressions"
+					},
+					{
+						"name": "MANAGE_THREADS",
+						"value": "17179869184",
+						"description": "Allows management of threads, including archiving, locking and deleting them"
+					},
+					{"name": "CREATE_PUBLIC_THREADS", "value": "34359738368", "description": "Allows creating public threads"},
+					{"name": "CREATE_PRIVATE_THREADS", "value": "68719476736", "description": "Allows creating private threads"},
+					{
+						"name": "SEND_MESSAGES_IN_THREADS",
+						"value": "274877906944",
+						"description": "Allows sending messages in threads"
 					},
 					{
 						"name": "USE_EXTERNAL_STICKERS",

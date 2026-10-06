@@ -28,6 +28,12 @@ export const MessageTypeSchema = createInt32EnumType(
 			'CHANNEL_FOLLOW_ADD',
 			'System message posted when a channel starts following an announcement channel',
 		],
+		[MessageTypes.THREAD_CREATED, 'THREAD_CREATED', 'System message posted when a thread is created in a channel'],
+		[
+			MessageTypes.THREAD_STARTER_MESSAGE,
+			'THREAD_STARTER_MESSAGE',
+			'The first message of a thread created from an existing message',
+		],
 		[MessageTypes.REPLY, 'REPLY', 'A reply message'],
 	],
 	'The type of message',

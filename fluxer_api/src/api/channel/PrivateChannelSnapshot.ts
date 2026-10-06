@@ -2,7 +2,11 @@
 
 import type {UserID} from '@app/api/BrandedTypes';
 import {Db, type DbOp} from '@app/api/database/CassandraTypes';
-import type {ChannelRow, PrivateChannelRow} from '@app/api/database/types/ChannelTypes';
+import {
+	CHANNEL_THREAD_COLUMN_DEFAULTS,
+	type ChannelRow,
+	type PrivateChannelRow,
+} from '@app/api/database/types/ChannelTypes';
 import {type ChannelType, ChannelTypes} from '@fluxer/constants/src/ChannelConstants';
 
 type SnapshotPatch = Partial<{
@@ -81,6 +85,7 @@ export function channelRowFromPrivateChannelSnapshot(row: PrivateChannelRow): Ch
 		return null;
 	}
 	return {
+		...CHANNEL_THREAD_COLUMN_DEFAULTS,
 		channel_id: row.channel_id,
 		guild_id: null,
 		type: row.channel_type as ChannelType,
