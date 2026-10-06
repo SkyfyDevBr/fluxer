@@ -85,7 +85,7 @@ jobs:
       PLATFORM: windows
       ARCH: x64
       ELECTRON_ARCH: x64
-      FLUXER_CI_BIN: ${{ github.workspace }}/_ci-bin/fluxer-ci.exe
+      FLUXER_CI_BIN: ${{ runner.temp }}/fluxer-ci.exe
     steps:
       - uses: actions/checkout@v4
       - uses: TheMrMilchmann/setup-msvc-dev@v4
@@ -103,9 +103,7 @@ jobs:
         run: cargo build --locked --manifest-path tools/ci/Cargo.toml
       - name: Stage CI tool
         shell: pwsh
-        run: |
-          New-Item -ItemType Directory -Force -Path _ci-bin | Out-Null
-          Copy-Item target/debug/fluxer-ci.exe _ci-bin/fluxer-ci.exe
+        run: Copy-Item target/debug/fluxer-ci.exe "$env:RUNNER_TEMP/fluxer-ci.exe"
       - name: Ensure python3 command
         run: '& $env:FLUXER_CI_BIN build-desktop --step ensure_python3_windows'
       - name: Install Rust Windows target
@@ -153,7 +151,7 @@ jobs:
       PLATFORM: linux
       ARCH: x64
       ELECTRON_ARCH: x64
-      FLUXER_CI_BIN: ${{ github.workspace }}/_ci-bin/fluxer-ci
+      FLUXER_CI_BIN: ${{ runner.temp }}/fluxer-ci
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
@@ -168,9 +166,8 @@ jobs:
         run: cargo build --locked --manifest-path tools/ci/Cargo.toml
       - name: Stage CI tool
         run: |
-          mkdir -p _ci-bin
-          cp target/debug/fluxer-ci _ci-bin/fluxer-ci
-          chmod +x _ci-bin/fluxer-ci
+          cp target/debug/fluxer-ci "$RUNNER_TEMP/fluxer-ci"
+          chmod +x "$RUNNER_TEMP/fluxer-ci"
       - name: Install Linux build dependencies
         run: '"$FLUXER_CI_BIN" build-desktop --step install_linux_deps'
       - name: Install dependencies
