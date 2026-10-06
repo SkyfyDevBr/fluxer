@@ -6,6 +6,11 @@
 #
 # It deliberately skips the upstream signing (Apple/Azure), Velopack and
 # release-publishing steps, which depend on the fluxerapp release environment.
+#
+# The fluxer-ci helper binary is staged into _ci-bin/ before use. On Windows a
+# running executable cannot be replaced, and fluxer_desktop's build script
+# invokes `cargo run` for tools/ci mid-build; running the staged copy avoids
+# that self-overwrite.
 
 name: build desktop (fork)
 
@@ -80,7 +85,7 @@ jobs:
       PLATFORM: windows
       ARCH: x64
       ELECTRON_ARCH: x64
-      FLUXER_CI_MANIFEST: ${{ github.workspace }}/tools/ci/Cargo.toml
+      FLUXER_CI_BIN: ${{ github.workspace }}/_ci-bin/fluxer-ci.exe
     steps:
       - uses: actions/checkout@v4
       - uses: TheMrMilchmann/setup-msvc-dev@v4
@@ -94,44 +99,35 @@ jobs:
           node-version: '26'
       - name: Install pnpm
         run: npm install --global pnpm@11.27.0
+      - name: Build CI tool
+        run: cargo build --locked --manifest-path tools/ci/Cargo.toml
+      - name: Stage CI tool
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path _ci-bin | Out-Null
+          Copy-Item target/debug/fluxer-ci.exe _ci-bin/fluxer-ci.exe
       - name: Ensure python3 command
-        run: >-
-          cargo run --locked --quiet --manifest-path "$env:FLUXER_CI_MANIFEST" -- build-desktop
-          --step ensure_python3_windows
+        run: '& $env:FLUXER_CI_BIN build-desktop --step ensure_python3_windows'
       - name: Install Rust Windows target
-        run: >-
-          cargo run --locked --quiet --manifest-path "$env:FLUXER_CI_MANIFEST" -- build-desktop
-          --step install_rust_windows_targets
+        run: '& $env:FLUXER_CI_BIN build-desktop --step install_rust_windows_targets'
       - name: Install dependencies
         working-directory: fluxer_desktop
-        run: >-
-          cargo run --locked --quiet --manifest-path "$env:FLUXER_CI_MANIFEST" -- build-desktop
-          --step install_dependencies
+        run: '& $env:FLUXER_CI_BIN build-desktop --step install_dependencies'
       - name: Update version
         working-directory: fluxer_desktop
-        run: >-
-          cargo run --locked --quiet --manifest-path "$env:FLUXER_CI_MANIFEST" -- build-desktop
-          --step update_version
+        run: '& $env:FLUXER_CI_BIN build-desktop --step update_version'
       - name: Set build channel
         working-directory: fluxer_desktop
-        run: >-
-          cargo run --locked --quiet --manifest-path "$env:FLUXER_CI_MANIFEST" -- build-desktop
-          --step set_build_channel
+        run: '& $env:FLUXER_CI_BIN build-desktop --step set_build_channel'
       - name: Build Electron main process
         working-directory: fluxer_desktop
-        run: >-
-          cargo run --locked --quiet --manifest-path "$env:FLUXER_CI_MANIFEST" -- build-desktop
-          --step build_electron_main
+        run: '& $env:FLUXER_CI_BIN build-desktop --step build_electron_main'
       - name: Build Windows app (unsigned)
         working-directory: fluxer_desktop
-        run: >-
-          cargo run --locked --quiet --manifest-path "$env:FLUXER_CI_MANIFEST" -- build-desktop
-          --step build_app_windows
+        run: '& $env:FLUXER_CI_BIN build-desktop --step build_app_windows'
       - name: Create portable ZIP
         working-directory: fluxer_desktop
-        run: >-
-          cargo run --locked --quiet --manifest-path "$env:FLUXER_CI_MANIFEST" -- build-desktop
-          --step create_portable_zip_windows
+        run: '& $env:FLUXER_CI_BIN build-desktop --step create_portable_zip_windows'
       - name: Upload Windows artifacts
         uses: actions/upload-artifact@v4
         with:
@@ -157,7 +153,7 @@ jobs:
       PLATFORM: linux
       ARCH: x64
       ELECTRON_ARCH: x64
-      FLUXER_CI_MANIFEST: ${{ github.workspace }}/tools/ci/Cargo.toml
+      FLUXER_CI_BIN: ${{ github.workspace }}/_ci-bin/fluxer-ci
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
@@ -168,37 +164,32 @@ jobs:
           node-version: '26'
       - name: Install pnpm
         run: npm install --global pnpm@11.27.0
+      - name: Build CI tool
+        run: cargo build --locked --manifest-path tools/ci/Cargo.toml
+      - name: Stage CI tool
+        run: |
+          mkdir -p _ci-bin
+          cp target/debug/fluxer-ci _ci-bin/fluxer-ci
+          chmod +x _ci-bin/fluxer-ci
       - name: Install Linux build dependencies
-        run: >-
-          cargo run --locked --quiet --manifest-path tools/ci/Cargo.toml -- build-desktop
-          --step install_linux_deps
+        run: '"$FLUXER_CI_BIN" build-desktop --step install_linux_deps'
       - name: Install dependencies
         working-directory: fluxer_desktop
-        run: >-
-          cargo run --locked --quiet --manifest-path "$FLUXER_CI_MANIFEST" -- build-desktop
-          --step install_dependencies
+        run: '"$FLUXER_CI_BIN" build-desktop --step install_dependencies'
       - name: Update version
         working-directory: fluxer_desktop
-        run: >-
-          cargo run --locked --quiet --manifest-path "$FLUXER_CI_MANIFEST" -- build-desktop
-          --step update_version
+        run: '"$FLUXER_CI_BIN" build-desktop --step update_version'
       - name: Set build channel
         working-directory: fluxer_desktop
-        run: >-
-          cargo run --locked --quiet --manifest-path "$FLUXER_CI_MANIFEST" -- build-desktop
-          --step set_build_channel
+        run: '"$FLUXER_CI_BIN" build-desktop --step set_build_channel'
       - name: Build Electron main process
         working-directory: fluxer_desktop
-        run: >-
-          cargo run --locked --quiet --manifest-path "$FLUXER_CI_MANIFEST" -- build-desktop
-          --step build_electron_main
+        run: '"$FLUXER_CI_BIN" build-desktop --step build_electron_main'
       - name: Build Linux app (unsigned)
         working-directory: fluxer_desktop
         env:
           USE_SYSTEM_FPM: 'true'
-        run: >-
-          cargo run --locked --quiet --manifest-path "$FLUXER_CI_MANIFEST" -- build-desktop
-          --step build_app_linux
+        run: '"$FLUXER_CI_BIN" build-desktop --step build_app_linux'
       - name: Upload Linux artifacts
         uses: actions/upload-artifact@v4
         with:
