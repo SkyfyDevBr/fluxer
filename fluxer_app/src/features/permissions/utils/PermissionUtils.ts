@@ -16,6 +16,7 @@ import {
 	DEFAULT_PERMISSIONS,
 	ElevatedPermissions,
 	Permissions,
+	THREAD_CHANNEL_TYPES,
 } from '@fluxer/constants/src/ChannelConstants';
 import {GuildMFALevel} from '@fluxer/constants/src/GuildConstants';
 import type {RoleId, UserId} from '@fluxer/schema/src/branded/WireIds';
@@ -78,8 +79,10 @@ export function computePermissions(
 	const userId = typeof user === 'string' ? user : user.id;
 	let guild: Guild | null = null;
 	let guildRoles: Record<RoleId, Role> | null = null;
+	let isThreadChannel = false;
 	if ('guild_id' in context) {
 		const channel = context as Channel;
+		isThreadChannel = THREAD_CHANNEL_TYPES.has(channel.type);
 		const channelOverwrites = channel.permission_overwrites ?? [];
 		const convertedOverwrites = Object.fromEntries(
 			channelOverwrites.map((ow) => [
@@ -139,28 +142,36 @@ export function computePermissions(
 	}
 	if ((permissions & Permissions.ADMINISTRATOR) === Permissions.ADMINISTRATOR) {
 		permissions = ALL_PERMISSIONS;
-	} else if (overwrites) {
-		const overwriteEveryone = overwrites[guild.id];
-		if (overwriteEveryone != null) {
-			permissions ^= permissions & overwriteEveryone.deny;
-			permissions |= overwriteEveryone.allow;
+	} else {
+		// Guilds created before threads existed do not carry the thread bits on their
+		// everyone role. Treat SEND_MESSAGES as implying SEND_MESSAGES_IN_THREADS in
+		// those guilds, before overwrites so an explicit deny still wins.
+		if (isThreadChannel && (permissions & Permissions.SEND_MESSAGES) !== 0n) {
+			permissions |= Permissions.SEND_MESSAGES_IN_THREADS;
 		}
-		if (member != null) {
-			let allow = NONE;
-			let deny = NONE;
-			for (const roleId of member.roles) {
-				const overwriteRole = overwrites[roleId as string];
-				if (overwriteRole != null) {
-					allow |= overwriteRole.allow;
-					deny |= overwriteRole.deny;
-				}
+		if (overwrites) {
+			const overwriteEveryone = overwrites[guild.id];
+			if (overwriteEveryone != null) {
+				permissions ^= permissions & overwriteEveryone.deny;
+				permissions |= overwriteEveryone.allow;
 			}
-			permissions ^= permissions & deny;
-			permissions |= allow;
-			const overwriteMember = overwrites[userId];
-			if (overwriteMember != null) {
-				permissions ^= permissions & overwriteMember.deny;
-				permissions |= overwriteMember.allow;
+			if (member != null) {
+				let allow = NONE;
+				let deny = NONE;
+				for (const roleId of member.roles) {
+					const overwriteRole = overwrites[roleId as string];
+					if (overwriteRole != null) {
+						allow |= overwriteRole.allow;
+						deny |= overwriteRole.deny;
+					}
+				}
+				permissions ^= permissions & deny;
+				permissions |= allow;
+				const overwriteMember = overwrites[userId];
+				if (overwriteMember != null) {
+					permissions ^= permissions & overwriteMember.deny;
+					permissions |= overwriteMember.allow;
+				}
 			}
 		}
 	}

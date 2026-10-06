@@ -73,11 +73,43 @@ member_base_permissions(_, _, _) ->
 -spec channel_permissions(base_permissions(), user_id(), maybe_channel_id(), guild_state()) ->
     permission().
 channel_permissions({Permissions, MemberRoles, GuildId}, UserId, ChannelId, State) ->
+    EffectivePermissions = maybe_add_legacy_thread_permissions(Permissions, ChannelId, State),
     guild_permissions_overwrites:maybe_apply_channel_overwrites(
-        Permissions, UserId, MemberRoles, ChannelId, GuildId, State
+        EffectivePermissions, UserId, MemberRoles, ChannelId, GuildId, State
     );
 channel_permissions(Permissions, _UserId, _ChannelId, _State) ->
     Permissions.
+
+-spec maybe_add_legacy_thread_permissions(permission(), maybe_channel_id(), guild_state()) ->
+    permission().
+maybe_add_legacy_thread_permissions(Permissions, ChannelId, State) when is_integer(ChannelId) ->
+    case guild_permissions_check:find_channel_by_id(ChannelId, State) of
+        Channel when is_map(Channel) ->
+            case is_thread_channel(Channel) andalso
+                permission_bits:has(Permissions, constants:send_messages_permission()) andalso
+                not permission_bits:has(
+                    Permissions, constants:send_messages_in_threads_permission()
+                )
+            of
+                true ->
+                    permission_bits:add(
+                        Permissions, constants:send_messages_in_threads_permission()
+                    );
+                false ->
+                    Permissions
+            end;
+        _ ->
+            Permissions
+    end;
+maybe_add_legacy_thread_permissions(Permissions, _ChannelId, _State) ->
+    Permissions.
+
+-spec is_thread_channel(map()) -> boolean().
+is_thread_channel(Channel) ->
+    case guild_data_normalize_schema:int(maps:get(<<"type">>, Channel, undefined)) of
+        Type when Type =:= 10; Type =:= 11; Type =:= 12 -> true;
+        _ -> false
+    end.
 
 -spec base_permissions_for_data(user_id(), maybe_member(), guild_state(), guild_data()) ->
     base_permissions().

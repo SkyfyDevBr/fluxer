@@ -15,16 +15,8 @@ import type {UserCacheService} from '@app/api/infrastructure/UserCacheService';
 import type {RequestCache} from '@app/api/middleware/RequestCacheMiddleware';
 import type {Channel} from '@app/api/models/Channel';
 import type {User} from '@app/api/models/User';
-import {
-	ChannelTypes,
-	MessageReferenceTypes,
-	MessageTypes,
-	Permissions,
-} from '@fluxer/constants/src/ChannelConstants';
-import {
-	MAX_ACTIVE_THREADS_PER_GUILD,
-	THREAD_AUTO_ARCHIVE_DURATION_DEFAULT,
-} from '@fluxer/constants/src/LimitConstants';
+import {ChannelTypes, MessageReferenceTypes, MessageTypes, Permissions} from '@fluxer/constants/src/ChannelConstants';
+import {MAX_ACTIVE_THREADS_PER_GUILD, THREAD_AUTO_ARCHIVE_DURATION_DEFAULT} from '@fluxer/constants/src/LimitConstants';
 import {InvalidChannelTypeError} from '@fluxer/errors/src/domains/channel/InvalidChannelTypeError';
 import {MaxActiveThreadsError} from '@fluxer/errors/src/domains/channel/MaxActiveThreadsError';
 import {ThreadLockedError} from '@fluxer/errors/src/domains/channel/ThreadLockedError';
@@ -33,11 +25,14 @@ import {UnknownMessageError} from '@fluxer/errors/src/domains/channel/UnknownMes
 import {UnknownThreadMemberError} from '@fluxer/errors/src/domains/channel/UnknownThreadMemberError';
 import {MissingPermissionsError} from '@fluxer/errors/src/domains/core/MissingPermissionsError';
 import type {
+	ThreadCreateFromMessageRequest,
+	ThreadCreateRequest,
+} from '@fluxer/schema/src/domains/channel/ChannelRequestSchemas';
+import type {
 	ChannelResponse,
 	ThreadListResponse,
 	ThreadMemberResponse,
 } from '@fluxer/schema/src/domains/channel/ChannelSchemas';
-import type {ThreadCreateFromMessageRequest, ThreadCreateRequest} from '@fluxer/schema/src/domains/channel/ChannelRequestSchemas';
 
 export interface CreateThreadFromMessageParams {
 	user: User;
@@ -92,7 +87,13 @@ export class ThreadService {
 		});
 	}
 
-	private async dispatchThreadCreate({thread, requestCache}: {thread: Channel; requestCache: RequestCache}): Promise<void> {
+	private async dispatchThreadCreate({
+		thread,
+		requestCache,
+	}: {
+		thread: Channel;
+		requestCache: RequestCache;
+	}): Promise<void> {
 		const data = await mapThreadToInternalResponse({
 			channel: thread,
 			currentUserId: null,
@@ -246,7 +247,11 @@ export class ThreadService {
 		data,
 		requestCache,
 	}: CreateThreadFromMessageParams): Promise<ChannelResponse> {
-		const {channel: parent, guild, checkPermission} = await this.channelAuthService.getChannelAuthenticated({
+		const {
+			channel: parent,
+			guild,
+			checkPermission,
+		} = await this.channelAuthService.getChannelAuthenticated({
 			userId: user.id,
 			channelId: parentChannelId,
 		});
@@ -316,6 +321,12 @@ export class ThreadService {
 			type: MessageTypes.THREAD_CREATED,
 			content: data.name,
 			guildId,
+			messageReference: {
+				channel_id: channelId,
+				message_id: null,
+				guild_id: guildId,
+				type: MessageReferenceTypes.DEFAULT,
+			},
 		});
 		await this.channelUtilsService.dispatchMessageCreate({
 			channel: parent,
@@ -326,7 +337,11 @@ export class ThreadService {
 	}
 
 	async createThread({user, parentChannelId, data, requestCache}: CreateThreadParams): Promise<ChannelResponse> {
-		const {channel: parent, guild, checkPermission} = await this.channelAuthService.getChannelAuthenticated({
+		const {
+			channel: parent,
+			guild,
+			checkPermission,
+		} = await this.channelAuthService.getChannelAuthenticated({
 			userId: user.id,
 			channelId: parentChannelId,
 		});
@@ -374,6 +389,12 @@ export class ThreadService {
 				type: MessageTypes.THREAD_CREATED,
 				content: data.name,
 				guildId,
+				messageReference: {
+					channel_id: channelId,
+					message_id: null,
+					guild_id: guildId,
+					type: MessageReferenceTypes.DEFAULT,
+				},
 			});
 			await this.channelUtilsService.dispatchMessageCreate({
 				channel: parent,
@@ -653,7 +674,11 @@ export class ThreadService {
 		limit: number;
 		requestCache: RequestCache;
 	}): Promise<ThreadListResponse> {
-		const {channel: parent, guild, hasPermission} = await this.channelAuthService.getChannelAuthenticated({
+		const {
+			channel: parent,
+			guild,
+			hasPermission,
+		} = await this.channelAuthService.getChannelAuthenticated({
 			userId,
 			channelId,
 		});
@@ -678,7 +703,9 @@ export class ThreadService {
 			.filter((thread) => thread.threadMetadata?.archived ?? false)
 			.filter((thread) => {
 				if (mode === 'public') {
-					return thread.type === ChannelTypes.GUILD_PUBLIC_THREAD || thread.type === ChannelTypes.GUILD_ANNOUNCEMENT_THREAD;
+					return (
+						thread.type === ChannelTypes.GUILD_PUBLIC_THREAD || thread.type === ChannelTypes.GUILD_ANNOUNCEMENT_THREAD
+					);
 				}
 				if (mode === 'private') {
 					return thread.isPrivateThread();

@@ -83,6 +83,14 @@ describe('Thread Management', () => {
 			.get(`/channels/${thread.id}/messages`)
 			.execute();
 		expect(messages.some((entry) => entry.type === 21)).toBe(true);
+		const parentMessages = await createBuilder<Array<MessageResponse>>(harness, owner.token)
+			.get(`/channels/${systemChannel.id}/messages`)
+			.execute();
+		const notice = parentMessages.find((entry) => entry.type === 18);
+		expect(notice).toBeDefined();
+		expect(notice?.content).toBe('Release notes');
+		expect(notice?.message_reference?.channel_id).toBe(thread.id);
+		expect(notice?.message_reference?.message_id ?? null).toBeNull();
 		expect(guild.id).toBeTruthy();
 	});
 

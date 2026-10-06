@@ -26,6 +26,8 @@
     kick_members_permission/0,
     ban_members_permission/0,
     manage_threads_permission/0,
+    send_messages_permission/0,
+    send_messages_in_threads_permission/0,
     view_channel_members_permission/0,
     voice_channel_camera_user_limit/0
 ]).
@@ -152,6 +154,12 @@ ban_members_permission() -> 4.
 
 -spec manage_threads_permission() -> pos_integer().
 manage_threads_permission() -> 17179869184.
+
+-spec send_messages_permission() -> pos_integer().
+send_messages_permission() -> 2048.
+
+-spec send_messages_in_threads_permission() -> pos_integer().
+send_messages_in_threads_permission() -> 274877906944.
 
 -spec view_channel_members_permission() -> pos_integer().
 view_channel_members_permission() -> 18014398509481984.
